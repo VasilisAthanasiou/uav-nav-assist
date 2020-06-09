@@ -20,7 +20,6 @@ def process_image(src_img):
     gray_image = cv.cvtColor(res_img, cv.COLOR_BGR2GRAY)
 
     # Remove noise
-    #gray_image = cv.fastNlMeansDenoising(gray_image, gray_image, 13, 7, 21) # fastNlMeansDenoising is too slow for rt applications
     gray_image = cv.blur(gray_image, (5, 5), gray_image)
 
     # Binarize image
@@ -69,18 +68,25 @@ cv.imshow('Processed Template', processedTemplate)
 
 
 #
-def find_pixel_dx(sat_img, temp_img, start_x):  # (satellite, template, template random x coordinate inside satellite
+def find_pixel_dx(sat_img, temp_img):  # (satellite, template, template random x coordinate inside satellite
     # Store the image array shapes              # image)
-    sat_shapes = [x.shape for x in sat_img]
-    sat_height, sat_width, _ = zip(*sat_shapes)
+    sat_height, sat_width = sat_img.shape
+    temp_height, temp_width = temp_img.shape
 
-    temp_shapes = [x.shape for x in temp_img]
-    temp_height, temp_width, _ = zip(*temp_shapes)
+    result = []
+    max_matrix = np.zeros(temp_img.shape)
+    
+    for most_left_pixel in range(int(sat_width - temp_width)):
+        print("MLP : {} | TEMPWIDTH : {} | SUM : {}".format(most_left_pixel, temp_width, most_left_pixel + temp_width))
+        search_space = sat_img[0:temp_height, most_left_pixel:most_left_pixel + temp_width]
+        result.append((np.logical_and(search_space, temp_img), most_left_pixel))
+    print(result[249])
+        #if result[most_left_pixel] >
+    return result
 
-    for start_pixel in range(sat_width + 1):
-        search_space = sat_img[0:temp_height, start_pixel:start_pixel + temp_width]
 
-
+bool_res = find_pixel_dx(processedImg, processedTemplate)
+print("")
 # Close the window when the user presses the ESC key
 while True:
     if cv.waitKey(0) == 27:
