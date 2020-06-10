@@ -11,7 +11,8 @@ templates_directory = 'templates'  # Try templates x for statistical analysis
 # Append each image path into a list
 source_paths = [os.path.join(images_directory, image_path) for image_path in os.listdir(images_directory)]
 templates_paths = [os.path.join(templates_directory, template_path) for template_path in os.listdir(templates_directory)]
-
+source_paths.sort()
+templates_paths.sort()
 
 # ---------------------------------------------Image Processing--------------------------------------------------------- #
 
@@ -82,7 +83,7 @@ def find_pixel_dx(sat_img, temp_img):  # (satellite / source image, template ima
 
     # Compare every possible roi with the template by performing logical operations and find the greatest match
     for most_left_pixel in range(int(sat_width - temp_width)):  # Search the whole image
-        print("MLP : {} | TEMPWIDTH : {} | SUM : {}".format(most_left_pixel, temp_width, most_left_pixel + temp_width))
+        # print("MLP : {} | TEMPWIDTH : {} | SUM : {}".format(most_left_pixel, temp_width, most_left_pixel + temp_width))
 
         roi = sat_img[0:temp_height, most_left_pixel:most_left_pixel + temp_width]  # Region of interest
         and_result = np.logical_and(roi, temp_img)  # Perform AND on each roi and template pixel (1)
@@ -102,23 +103,26 @@ def find_pixel_dx(sat_img, temp_img):  # (satellite / source image, template ima
 # ------------------------------------------ Statistical Analysis ------------------------------------------------------ #
 
 
-pixel_position_file = open('dataset-img-info.txt', 'r')
+pixel_position_file = open('testdatasetdata.txt', 'r')
 actual_pixel_position = pixel_position_file.readlines()
 
 error = float(0)
 
 counter = 0
+templates_per_image = 600
 
 for img in source_images:
     processed_image = process_image(img)
-    for template in templates:
-        processed_template = process_image(template)
+    for i in range(templates_per_image + 1):
+        processed_template = process_image(templates[counter])
         matched_matrix_and_location = find_pixel_dx(processed_image, processed_template)
-        error += np.abs(matched_matrix_and_location - actual_pixel_position) / img_width
+        print(matched_matrix_and_location[1])
+    error += float(np.abs(matched_matrix_and_location[1] - int(actual_pixel_position[counter])) / (img_width / 2))
+    counter += 1
 
-error = error / len(source_images)
+error = (error / len(source_images)) * 100
 
-
+print("There is {}% error.".format(error))
 # ---------------------------------------------------------------------------------------------------------------------- #
 
 
@@ -128,10 +132,10 @@ error = error / len(source_images)
 #                                                                            match_matrix_and_location[1]))
 
 # Close the window when the user presses the ESC key
-while True:
-    if cv.waitKey(0) == 27:
-        cv.destroyAllWindows()
-        break
+# while True:
+#     if cv.waitKey(0) == 27:
+#         cv.destroyAllWindows()
+#         break
 
 
 
