@@ -11,7 +11,9 @@ templates_directory = 'templates'
 images_paths = [os.path.join(images_directory, image_path) for image_path in os.listdir(images_directory)]
 templates_paths = [os.path.join(templates_directory, template_path) for template_path in os.listdir(templates_directory)]
 
-# ---------------------------------------Image Processing-------------------------------------- #
+
+# ---------------------------------------------Image Processing--------------------------------------------------------- #
+
 def process_image(src_img):
     # Resize image
     res_img = cv.resize(src_img, None, fx=0.5, fy=0.5, interpolation=cv.INTER_CUBIC)
@@ -25,7 +27,7 @@ def process_image(src_img):
     # Binarize image
 
     # bin_img = cv.threshold(gray_image, 120, 255, cv.THRESH_BINARY)
-    (thresh, bin_img) = cv.threshold(gray_image, 0, 255,  cv.THRESH_BINARY + cv.THRESH_OTSU)
+    (thresh, bin_img) = cv.threshold(gray_image, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
 
     # Erode binary image
     kernel = np.ones((2, 2), np.uint8)
@@ -34,20 +36,10 @@ def process_image(src_img):
     # Dilate binary image
     bin_img = cv.morphologyEx(bin_img, cv.MORPH_CLOSE, kernel)
 
-    # Translate image : shift its location
-
-    # Translating the image randomly in the x axis
-    # translate_x = random.randrange(-rows, rows + 1)
-    # tf_matrix = np.float32([[1, 0, translate_x], [0, 1, 0]])
-    # shifted_img = cv.warpAffine(gray_image, tf_matrix, (cols, rows))
-
-    # Try to match the shifted image to the original(gray) one
-    # while not (shifted_img == gray_image).all():
-
     return bin_img
 
 
-# --------------------------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------------------------------------------------- #
 
 
 # Read the image
@@ -55,38 +47,54 @@ img = [cv.imread(image) for image in images_paths]
 template = [cv.imread(template) for template in templates_paths]
 
 # Display images
-index = 1
-processedImg = process_image(img[index])
-processedTemplate = process_image(template[5])
+sat_index = 3
+temp_index = 3
 
-cv.imshow('Original Image', img[index])
+processedImg = process_image(img[sat_index])
+processedTemplate = process_image(template[temp_index])
+
+cv.imshow('Original Image', img[sat_index])
 cv.imshow('Processed Image', processedImg)
 
-cv.imshow('Template', template[5])
+cv.imshow('Template', template[temp_index])
 cv.imshow('Processed Template', processedTemplate)
 
 
+# ------------------------------------------Matching Algorithm ----------------------------------------------------------#
 
-#
-def find_pixel_dx(sat_img, temp_img):  # (satellite, template, template random x coordinate inside satellite
-    # Store the image array shapes              # image)
+def find_pixel_dx(sat_img, temp_img):  # (satellite / source image, template image)
+    # Store the image array shapes
     sat_height, sat_width = sat_img.shape
     temp_height, temp_width = temp_img.shape
 
-    result = []
-    max_matrix = np.zeros(temp_img.shape)
-    
-    for most_left_pixel in range(int(sat_width - temp_width)):
+    comp_matrix = []  # The source-sensed image comparison matrix is stored here, as well as the first x px of the roi
+    max_matrix = (np.zeros(temp_img.shape), 0)  # Will compare with comparison results, to find the greatest match
+
+    # Compare every possible roi with the template by performing logical operations and find the greatest match
+    for most_left_pixel in range(int(sat_width - temp_width)):  # Search the whole image
         print("MLP : {} | TEMPWIDTH : {} | SUM : {}".format(most_left_pixel, temp_width, most_left_pixel + temp_width))
-        search_space = sat_img[0:temp_height, most_left_pixel:most_left_pixel + temp_width]
-        result.append((np.logical_and(search_space, temp_img), most_left_pixel))
-    print(result[249])
-        #if result[most_left_pixel] >
-    return result
+
+        roi = sat_img[0:temp_height, most_left_pixel:most_left_pixel + temp_width]  # Region of interest
+        and_result = np.logical_and(roi, temp_img)  # Perform AND on each roi and template pixel (1)
+        xnor_result = np.invert(np.logical_xor(roi, temp_img))  # Perform XNOR on each roi and template pixel (2)
+        comp_matrix.append((np.array(np.logical_or(and_result, xnor_result), dtype=int), most_left_pixel))  # (1) OR (2)
+
+        comp_sum = int(np.sum(comp_matrix[most_left_pixel][0]))  # Sum the comparison matrix
+        max_sum = int(np.sum(max_matrix[0]))  # Sum the max matrix
+
+        if comp_sum > max_sum:  # Find max comparison matrix
+            max_matrix = np.copy(comp_matrix[most_left_pixel][0]), most_left_pixel  # Store matrix and most left pixel
+
+    return max_matrix  # Return the result
+
+# ---------------------------------------------------------------------------------------------------------------------- #
 
 
-bool_res = find_pixel_dx(processedImg, processedTemplate)
-print("")
+match_matrix_and_location = find_pixel_dx(processedImg, processedTemplate)
+
+print("Numpy array object {}.\n\nStarts at pixel no. {} on x axis.".format(match_matrix_and_location[0],
+                                                                           match_matrix_and_location[1]))
+
 # Close the window when the user presses the ESC key
 while True:
     if cv.waitKey(0) == 27:
