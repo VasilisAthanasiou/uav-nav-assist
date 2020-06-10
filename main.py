@@ -3,12 +3,13 @@ import numpy as np
 import os
 import random
 
+
 # Set image directory
 images_directory = 'satellite_images'
-templates_directory = 'templates'
+templates_directory = 'templates'  # Try templates x for statistical analysis
 
 # Append each image path into a list
-images_paths = [os.path.join(images_directory, image_path) for image_path in os.listdir(images_directory)]
+source_paths = [os.path.join(images_directory, image_path) for image_path in os.listdir(images_directory)]
 templates_paths = [os.path.join(templates_directory, template_path) for template_path in os.listdir(templates_directory)]
 
 
@@ -43,24 +44,33 @@ def process_image(src_img):
 
 
 # Read the image
-img = [cv.imread(image) for image in images_paths]
-template = [cv.imread(template) for template in templates_paths]
+# img = [cv.imread(image) for image in images_paths]
+# template = [cv.imread(template) for template in templates_paths]
+source_images = []
+for image_path in source_paths:
+    source_images.append(cv.imread(image_path))
+
+templates = []
+for template_path in templates_paths:
+    templates.append(cv.imread(template_path))
+
+img_height, img_width, _ = source_images[0].shape
 
 # Display images
-sat_index = 3
-temp_index = 3
+sat_index = 3  # Horizontal Test images at 3 and 0 (for x-temp 3)
+temp_index = 1  # Horizontal Test images at 3 and 6
 
-processedImg = process_image(img[sat_index])
-processedTemplate = process_image(template[temp_index])
+# processedImg = process_image(img[sat_index])
+# processedTemplate = process_image(template[temp_index])
+#
+# cv.imshow('Original Image', img[sat_index])
+# cv.imshow('Processed Image', processedImg)
+#
+# cv.imshow('Template', template[temp_index])
+# cv.imshow('Processed Template', processedTemplate)
 
-cv.imshow('Original Image', img[sat_index])
-cv.imshow('Processed Image', processedImg)
 
-cv.imshow('Template', template[temp_index])
-cv.imshow('Processed Template', processedTemplate)
-
-
-# ------------------------------------------Matching Algorithm ----------------------------------------------------------#
+# ------------------------------------------ Matching Algorithm ----------------------------------------------------------#
 
 def find_pixel_dx(sat_img, temp_img):  # (satellite / source image, template image)
     # Store the image array shapes
@@ -89,14 +99,39 @@ def find_pixel_dx(sat_img, temp_img):  # (satellite / source image, template ima
 
 # ---------------------------------------------------------------------------------------------------------------------- #
 
+# ------------------------------------------ Statistical Analysis ------------------------------------------------------ #
 
-match_matrix_and_location = find_pixel_dx(processedImg, processedTemplate)
 
-print("Numpy array object {}.\n\nStarts at pixel no. {} on x axis.".format(match_matrix_and_location[0],
-                                                                           match_matrix_and_location[1]))
+pixel_position_file = open('dataset-img-info.txt', 'r')
+actual_pixel_position = pixel_position_file.readlines()
+
+error = float(0)
+
+counter = 0
+
+for img in source_images:
+    processed_image = process_image(img)
+    for template in templates:
+        processed_template = process_image(template)
+        matched_matrix_and_location = find_pixel_dx(processed_image, processed_template)
+        error += np.abs(matched_matrix_and_location - actual_pixel_position) / img_width
+
+error = error / len(source_images)
+
+
+# ---------------------------------------------------------------------------------------------------------------------- #
+
+
+# match_matrix_and_location = find_pixel_dx(processedImg, processedTemplate)
+#
+# print("Numpy array object {}.\n\nStarts at pixel no. {} on x axis.".format(match_matrix_and_location[0],
+#                                                                            match_matrix_and_location[1]))
 
 # Close the window when the user presses the ESC key
 while True:
     if cv.waitKey(0) == 27:
         cv.destroyAllWindows()
         break
+
+
+
