@@ -3,10 +3,9 @@ import numpy as np
 import os
 import random
 
-
 # Set image directory
 images_directory = 'satellite_images'
-templates_directory = 'templates'  # Try templates x for statistical analysis
+templates_directory = 'templates-x'  # Try templates x for statistical analysis
 
 # Append each image path into a list
 source_paths = [os.path.join(images_directory, image_path) for image_path in os.listdir(images_directory)]
@@ -14,11 +13,13 @@ templates_paths = [os.path.join(templates_directory, template_path) for template
 source_paths.sort()
 templates_paths.sort()
 
+
 # ---------------------------------------------Image Processing--------------------------------------------------------- #
 
-def process_image(src_img):
+
+def process_image(src_img, resize):
     # Resize image
-    res_img = cv.resize(src_img, None, fx=0.5, fy=0.5, interpolation=cv.INTER_CUBIC)
+    res_img = cv.resize(src_img, None, fx=resize, fy=resize, interpolation=cv.INTER_CUBIC)
 
     # Convert to grayscale
     gray_image = cv.cvtColor(res_img, cv.COLOR_BGR2GRAY)
@@ -61,6 +62,7 @@ img_height, img_width, _ = source_images[0].shape
 sat_index = 3  # Horizontal Test images at 3 and 0 (for x-temp 3)
 temp_index = 1  # Horizontal Test images at 3 and 6
 
+
 # processedImg = process_image(img[sat_index])
 # processedTemplate = process_image(template[temp_index])
 #
@@ -71,7 +73,7 @@ temp_index = 1  # Horizontal Test images at 3 and 6
 # cv.imshow('Processed Template', processedTemplate)
 
 
-# ------------------------------------------ Matching Algorithm ----------------------------------------------------------#
+# ------------------------------------------ Matching Algorithm -------------------------------------------------------- #
 
 def find_pixel_dx(sat_img, temp_img):  # (satellite / source image, template image)
     # Store the image array shapes
@@ -98,29 +100,34 @@ def find_pixel_dx(sat_img, temp_img):  # (satellite / source image, template ima
 
     return max_matrix  # Return the result
 
+
 # ---------------------------------------------------------------------------------------------------------------------- #
 
 # ------------------------------------------ Statistical Analysis ------------------------------------------------------ #
 
 
-pixel_position_file = open('testdatasetdata.txt', 'r')
+pixel_position_file = open('dataset-img-info.txt', 'r')
 actual_pixel_position = pixel_position_file.readlines()
 
 error = float(0)
 
 counter = 0
 templates_per_image = 600
+resize_value = 0.5
 
 for img in source_images:
-    processed_image = process_image(img)
-    for i in range(templates_per_image + 1):
-        processed_template = process_image(templates[counter])
+    processed_image = process_image(img, resize_value)
+    for i in range(templates_per_image):
+        processed_template = process_image(templates[counter], resize_value)
         matched_matrix_and_location = find_pixel_dx(processed_image, processed_template)
-        print(matched_matrix_and_location[1])
-    error += float(np.abs(matched_matrix_and_location[1] - int(actual_pixel_position[counter])) / (img_width / 2))
-    counter += 1
+        print("Sensed first pixel - actual first pixel : {}".format(
+            np.abs(matched_matrix_and_location[1] - int(actual_pixel_position[counter]))))
+        error += float(np.abs(matched_matrix_and_location[1] - int(actual_pixel_position[counter])))
+        counter += 1
 
-error = (error / len(source_images)) * 100
+# print(error)
+# print((img_width * resize_value * len(source_images) * templates_per_image))
+# error = (error / (img_width * resize_value * len(source_images) * templates_per_image)) * 100
 
 print("There is {}% error.".format(error))
 # ---------------------------------------------------------------------------------------------------------------------- #
@@ -136,6 +143,3 @@ print("There is {}% error.".format(error))
 #     if cv.waitKey(0) == 27:
 #         cv.destroyAllWindows()
 #         break
-
-
-
