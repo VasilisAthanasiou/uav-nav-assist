@@ -1,4 +1,5 @@
 
-Bpython:S125"Remove this commented out code.(Ÿ«õ·øÿÿÿÿ8€Ãªè©.
->python:S125"Remove this commented out code.(ŠÀÌ“8·Ž“î©.
-=python:S125@"Remove this commented out code.(‚’þÝ8À½Ûî©.
+Bpython:S125""Remove this commented out code.(Ÿ«õ·øÿÿÿÿ8€Ãªè©.
+=python:S125E"Remove this commented out code.(‚’þÝ8À½Ûî©.
+>python:S125"Remove this commented out code.(”­Û8¯ñå”ª.
+>python:S125™"Remove this commented out code.(ŠÀÌ“8·Ž“î©.

@@ -1,6 +1,7 @@
 import cv2 as cv
 import numpy as np
 import os
+from matplotlib import pyplot as plt
 import random
 
 # Set image directory
@@ -11,8 +12,10 @@ templates_directory = 'templates-x'  # Try templates x for statistical analysis
 source_paths = [os.path.join(images_directory, image_path) for image_path in os.listdir(images_directory)]
 templates_paths = [os.path.join(templates_directory, template_path) for template_path in os.listdir(templates_directory)]
 source_paths.sort()
-templates_paths.sort()
+templates_paths.sort(key=lambda name: int(os.path.splitext(os.path.basename(name))[0]))
 
+for elem in templates_paths:
+    print(elem)
 
 # ---------------------------------------------Image Processing--------------------------------------------------------- #
 
@@ -56,7 +59,8 @@ templates = []
 for template_path in templates_paths:
     templates.append(cv.imread(template_path))
 
-img_height, img_width, _ = source_images[0].shape
+
+
 
 # Display images
 sat_index = 3  # Horizontal Test images at 3 and 0 (for x-temp 3)
@@ -109,25 +113,47 @@ def find_pixel_dx(sat_img, temp_img):  # (satellite / source image, template ima
 pixel_position_file = open('dataset-img-info.txt', 'r')
 actual_pixel_position = pixel_position_file.readlines()
 
-error = float(0)
+error = float(0)  # Error for each template, error for each image and error for the whole set
+error_img = []
 
 counter = 0
-templates_per_image = 600
+
 resize_value = 0.5
 
 for img in source_images:
+    img_height, img_width, _ = img.shape
+    template_height, template_width, _ = templates[counter].shape
+
+    print("Source {}x{} , Template {}x{}".format(img_height, img_width, template_height, template_width))
+
     processed_image = process_image(img, resize_value)
+
+    templates_per_image = img_width - template_width
+
+    error_temp_img = 0
     for i in range(templates_per_image):
         processed_template = process_image(templates[counter], resize_value)
         matched_matrix_and_location = find_pixel_dx(processed_image, processed_template)
-        print("Sensed first pixel - actual first pixel : {}".format(
-            np.abs(matched_matrix_and_location[1] - int(actual_pixel_position[counter]))))
-        error += float(np.abs(matched_matrix_and_location[1] - int(actual_pixel_position[counter])))
+        # print("Sensed first pixel - actual first pixel : {}".format(
+        #     np.abs(matched_matrix_and_location[1] - int(actual_pixel_position[counter]))))
+        error_temp_img += float(np.abs(matched_matrix_and_location[1] - int(actual_pixel_position[counter])) / img_width * resize_value)
+        # print("Error for image {} and template {} : {:3f}".format(int(counter / templates_per_image), counter % templates_per_image, error_temp_img))
         counter += 1
+    error_img.append(error_temp_img / templates_per_image)
+    print("Error for image {} : {}".format(int(counter / templates_per_image), error_temp_img / templates_per_image))
+    cv.imshow('Original Image', img)
+    cv.imshow('Processed Image', processed_image)
+    cv.imshow('Processed Template', processed_template)
+    print(matched_matrix_and_location[0])
+    plt.imshow(matched_matrix_and_location[0], interpolation='nearest')
+    plt.show()
 
-# print(error)
-# print((img_width * resize_value * len(source_images) * templates_per_image))
-# error = (error / (img_width * resize_value * len(source_images) * templates_per_image)) * 100
+    while True:
+        if cv.waitKey(0) == 27:
+            cv.destroyAllWindows()
+            break
+
+error = (sum(error_img) / len(source_images)) * 100
 
 print("There is {}% error.".format(error))
 # ---------------------------------------------------------------------------------------------------------------------- #
@@ -139,7 +165,3 @@ print("There is {}% error.".format(error))
 #                                                                            match_matrix_and_location[1]))
 
 # Close the window when the user presses the ESC key
-# while True:
-#     if cv.waitKey(0) == 27:
-#         cv.destroyAllWindows()
-#         break
