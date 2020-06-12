@@ -5,8 +5,9 @@ from matplotlib import pyplot as plt
 import random
 
 # Set image directory
-images_directory = 'satellite_images'
-templates_directory = 'templates-x'  # Try templates x for statistical analysis
+images_directory = 'datasets/sources/source_diverse/cloudy'
+templates_directory = 'datasets/templates/test-temp'
+match_pos_path = 'testdatasetdata.txt'
 
 # Append each image path into a list
 source_paths = [os.path.join(images_directory, image_path) for image_path in os.listdir(images_directory)]
@@ -47,53 +48,27 @@ def process_image(src_img, resize):
 
 # ---------------------------------------------------------------------------------------------------------------------- #
 
-
-# Read the image
-# img = [cv.imread(image) for image in images_paths]
-# template = [cv.imread(template) for template in templates_paths]
-source_images = []
-for image_path in source_paths:
-    source_images.append(cv.imread(image_path))
-
-templates = []
-for template_path in templates_paths:
-    templates.append(cv.imread(template_path))
-
-
-
-
-# Display images
-sat_index = 3  # Horizontal Test images at 3 and 0 (for x-temp 3)
-temp_index = 1  # Horizontal Test images at 3 and 6
-
-
-# processedImg = process_image(img[sat_index])
-# processedTemplate = process_image(template[temp_index])
-#
-# cv.imshow('Original Image', img[sat_index])
-# cv.imshow('Processed Image', processedImg)
-#
-# cv.imshow('Template', template[temp_index])
-# cv.imshow('Processed Template', processedTemplate)
-
-
 # ------------------------------------------ Matching Algorithm -------------------------------------------------------- #
 
 def find_pixel_dx(sat_img, temp_img):  # (satellite / source image, template image)
     # Store the image array shapes
-    sat_height, sat_width = sat_img.shape
-    temp_height, temp_width = temp_img.shape
+    sat_height, sat_width, _ = sat_img.shape
+    temp_height, temp_width, _ = temp_img.shape
 
     comp_matrix = []  # The source-sensed image comparison matrix is stored here, as well as the first x px of the roi
     max_matrix = (np.zeros(temp_img.shape), 0)  # Will compare with comparison results, to find the greatest match
 
+    processed_template = process_image(temp_img, resize_value)
+    cv.imshow('Processed Template', processed_template)
     # Compare every possible roi with the template by performing logical operations and find the greatest match
     for most_left_pixel in range(int(sat_width - temp_width)):  # Search the whole image
         # print("MLP : {} | TEMPWIDTH : {} | SUM : {}".format(most_left_pixel, temp_width, most_left_pixel + temp_width))
 
         roi = sat_img[0:temp_height, most_left_pixel:most_left_pixel + temp_width]  # Region of interest
-        and_result = np.logical_and(roi, temp_img)  # Perform AND on each roi and template pixel (1)
-        xnor_result = np.invert(np.logical_xor(roi, temp_img))  # Perform XNOR on each roi and template pixel (2)
+        processed_roi = process_image(roi, resize_value)
+
+        and_result = np.logical_and(processed_roi, processed_template)  # Perform AND on each roi and template pixel (1)
+        xnor_result = np.invert(np.logical_xor(processed_roi, processed_template))  # Perform XNOR on each roi and template pixel (2)
         comp_matrix.append((np.array(np.logical_or(and_result, xnor_result), dtype=int), most_left_pixel))  # (1) OR (2)
 
         comp_sum = int(np.sum(comp_matrix[most_left_pixel][0]))  # Sum the comparison matrix
@@ -101,6 +76,7 @@ def find_pixel_dx(sat_img, temp_img):  # (satellite / source image, template ima
 
         if comp_sum > max_sum:  # Find max comparison matrix
             max_matrix = np.copy(comp_matrix[most_left_pixel][0]), most_left_pixel  # Store matrix and most left pixel
+            cv.imshow('Processed ROI', processed_roi)
 
     return max_matrix  # Return the result
 
@@ -109,9 +85,17 @@ def find_pixel_dx(sat_img, temp_img):  # (satellite / source image, template ima
 
 # ------------------------------------------ Statistical Analysis ------------------------------------------------------ #
 
+# Read the images
+source_images = []
+for image_path in source_paths:
+    source_images.append(cv.imread(image_path))
 
-pixel_position_file = open('dataset-img-info.txt', 'r')
-actual_pixel_position = pixel_position_file.readlines()
+templates = []
+for template_path in templates_paths:
+    templates.append(cv.imread(template_path))
+
+match_pos_file = open(match_pos_path, 'r')
+actual_match_position = match_pos_file.readlines()
 
 error = float(0)  # Error for each template, error for each image and error for the whole set
 error_img = []
@@ -126,31 +110,28 @@ for img in source_images:
 
     print("Source {}x{} , Template {}x{}".format(img_height, img_width, template_height, template_width))
 
-    processed_image = process_image(img, resize_value)
-
-    templates_per_image = img_width - template_width
+    templates_per_image = 1  # img_width - template_width
 
     error_temp_img = 0
     for i in range(templates_per_image):
-        processed_template = process_image(templates[counter], resize_value)
-        matched_matrix_and_location = find_pixel_dx(processed_image, processed_template)
+
+        matched_matrix_and_location = find_pixel_dx(img, templates[counter])
         # print("Sensed first pixel - actual first pixel : {}".format(
         #     np.abs(matched_matrix_and_location[1] - int(actual_pixel_position[counter]))))
-        error_temp_img += float(np.abs(matched_matrix_and_location[1] - int(actual_pixel_position[counter])) / img_width * resize_value)
+        error_temp_img += float(np.abs(matched_matrix_and_location[1] - int(actual_match_position[counter])) / img_width * resize_value)
         # print("Error for image {} and template {} : {:3f}".format(int(counter / templates_per_image), counter % templates_per_image, error_temp_img))
         counter += 1
     error_img.append(error_temp_img / templates_per_image)
     print("Error for image {} : {}".format(int(counter / templates_per_image), error_temp_img / templates_per_image))
     cv.imshow('Original Image', img)
-    cv.imshow('Processed Image', processed_image)
-    cv.imshow('Processed Template', processed_template)
-    print(matched_matrix_and_location[0])
-    plt.imshow(matched_matrix_and_location[0], interpolation='nearest')
-    plt.show()
+
+    #plt.imshow(matched_matrix_and_location[0])
+    #plt.show()
 
     while True:
         if cv.waitKey(0) == 27:
             cv.destroyAllWindows()
+            plt.close()
             break
 
 error = (sum(error_img) / len(source_images)) * 100

@@ -2,8 +2,8 @@ import numpy as np
 import cv2 as cv
 import os
 
-source_directory = 'source_diverse'
-templates_directory = 'templates-diverse'
+source_directory = 'datasets/sources/source_diverse/cloudy-images'
+templates_directory = 'datasets/templates/templates-diverse/cloudy'
 crop_width = 200
 
 # Open text file that will include image name and most left pixel
