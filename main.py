@@ -8,6 +8,7 @@ import random
 # ---------------------------------------------Image Processing--------------------------------------------------------- #
 
 def process_image(src_img, resize=0.5):
+
     # Resize image
     res_img = cv.resize(src_img, None, fx=resize, fy=resize, interpolation=cv.INTER_CUBIC)
 
@@ -35,6 +36,7 @@ def process_image(src_img, resize=0.5):
 # ------------------------------------------ Matching Algorithm -------------------------------------------------------- #
 
 def find_pixel_dx(sat_img, temp_img, resize_value=0.5):  # (satellite / source image, template image)
+
     # Store the image array shapes
     sat_height, sat_width, _ = sat_img.shape
     temp_height, temp_width, _ = temp_img.shape
@@ -84,7 +86,7 @@ def evaluate(src, temp, actual_match, resize_value=0.5):
 
         print("Source {}x{} , Template {}x{}".format(img_height, img_width, template_height, template_width))
 
-        templates_per_image = 1  # img_width - template_width  # This is the num of times the src will be scanned
+        templates_per_image = 3  # img_width - template_width  # This is the num of times the src will be scanned
 
         is_middle = False  # Is used to print when we are in the middle of one image
         error_temp_img = 0  # Error for one template. How displaced the sensed frame is from the actual one
@@ -109,8 +111,8 @@ def evaluate(src, temp, actual_match, resize_value=0.5):
 
 
 # Set image directory
-images_directory = 'datasets/sources/source_diverse/cloudy-images'
-templates_directory = 'datasets/templates/test-temp'
+images_directory = 'datasets/testing/source'
+templates_directory = 'datasets/testing/templates'
 match_pos_path = 'testdatasetdata.txt'
 
 # Append each image path into a list
