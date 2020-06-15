@@ -53,10 +53,9 @@ def find_pixel_dx(sat_img, temp_img, resize_value=0.5):  # (satellite / source i
         roi = sat_img[0:temp_height, most_left_pixel:most_left_pixel + temp_width]  # Region of interest
         processed_roi = process_image(roi, resize_value)
 
-        and_result = np.logical_and(processed_roi, processed_template)  # Perform AND on each roi and template pixel (1)
         xnor_result = np.invert(
             np.logical_xor(processed_roi, processed_template))  # Perform XNOR on each roi and template pixel (2)
-        comp_matrix.append((np.array(np.logical_or(and_result, xnor_result), dtype=int), most_left_pixel))  # (1) OR (2)
+        comp_matrix.append((np.array(xnor_result, dtype=int), most_left_pixel))  # (1) OR (2)
 
         comp_sum = int(np.sum(comp_matrix[most_left_pixel][0]))  # Sum the comparison matrix
         max_sum = int(np.sum(max_matrix[0]))  # Sum the max matrix
