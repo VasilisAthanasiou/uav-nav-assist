@@ -1,3 +1,3 @@
 
-npython:S1854K"JRemove this assignment to local variable 'error'; the value is never used.(‹ß†¼ıÿÿÿÿ8ŸïéÀª.
->python:S125"Remove this commented out code.(ŠÀÌ“8¢ø¸Áª.
+npython:S1854Q"JRemove this assignment to local variable 'error'; the value is never used.(‹ß†¼ıÿÿÿÿ8äÔ³«.
+>python:S125–"Remove this commented out code.(ŠÀÌ“8íØÀµ«.
