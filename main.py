@@ -4,7 +4,6 @@ import os
 from matplotlib import pyplot as plt
 import random
 
-
 # ---------------------------------------------Image Processing--------------------------------------------------------- #
 
 def process_image(src_img, resize=0.5):
@@ -35,48 +34,21 @@ def process_image(src_img, resize=0.5):
 
 # ------------------------------------------ Matching Algorithm -------------------------------------------------------- #
 
-def find_target(sat_img, temp_img, resize_value=0.5):  # (satellite / source image, template image)
+# Returns the top left pixel location of the sensed template
+def find_target(src, temp):
 
-    # Store the image array shapes
-    sat_height, sat_width, _ = sat_img.shape
-    temp_height, temp_width, _ = temp_img.shape
+    temp_height, temp_width, _ = temp.shape
+    # Apply template matching
+    res = cv.matchTemplate(src, temp, cv.TM_CCOEFF)
+    min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
 
-    comp_matrix = []  # The source-sensed image comparison matrix is stored here, as well as the first x px of the roi
-    max_matrix = (np.zeros(temp_img.shape), 0)  # Will compare with comparison results, to find the greatest match
-
-    processed_template = process_image(temp_img, resize_value)
-    # cv.imshow('Processed Template', processed_template)
-    # Compare every possible roi with the template by performing logical operations and find the greatest match
-    for most_top_pixel in range(int(sat_height - temp_height)):
-        for most_left_pixel in range(int(sat_width - temp_width)):  # Search the whole image
-            # print("MLP : {} | TEMPWIDTH : {} | SUM : {}".format(most_left_pixel, temp_width, most_left_pixel + temp_width))
-
-            roi = sat_img[most_top_pixel: most_top_pixel + temp_height, most_left_pixel:most_left_pixel + temp_width]  # Region of interest
-            processed_roi = process_image(roi, resize_value)
-
-            # DEBUG
-            #print("ROI SHAPE : {}".format(roi.shape))
-
-            and_result = np.logical_and(processed_roi, processed_template)  # Perform AND on each roi and template pixel (1)
-            xnor_result = np.invert(
-                np.logical_xor(processed_roi, processed_template))  # Perform XNOR on each roi and template pixel (2)
-            comp_matrix.append((np.array(np.logical_or(and_result, xnor_result), dtype=int), most_left_pixel, most_top_pixel))  # (1) OR (2)
-
-            comp_sum = int(np.sum(comp_matrix[most_left_pixel + most_top_pixel][0]))  # Sum the comparison matrix
-            max_sum = int(np.sum(max_matrix[0]))  # Sum the max matrix
-
-            if comp_sum > max_sum:  # Find max comparison matrix
-                max_matrix = np.copy(comp_matrix[most_left_pixel + most_top_pixel][0]), most_left_pixel, most_top_pixel  # Store matrix and most left pixel
-                # cv.imshow('Processed ROI', processed_roi)
-
-    return max_matrix  # Return the result
-
+    return max_loc # Return top left position
 
 # ---------------------------------------------------------------------------------------------------------------------- #
 
 # ------------------------------------------ Statistical Analysis ------------------------------------------------------ #
 
-def evaluate(src, temp, actual_match, resize_value=0.5):
+def evaluate(src, temp, actual_match, n_templates, resize_value=0.5):
 
     error = float(0)  # Error for the whole set
     error_img = []  # Error for each image Sum(error for every template / number of templates)
@@ -90,36 +62,39 @@ def evaluate(src, temp, actual_match, resize_value=0.5):
 
         print("Source {}x{} , Template {}x{}".format(img_height, img_width, template_height, template_width))
 
-        templates_per_image = 20  # img_width - template_width  # This is the num of times the src will be scanned
+        templates_per_image = n_templates  # This is the num of times the src will be scanned
 
-        is_middle = False  # Is used to print when we are in the middle of one image
+        is_middle = False  # Is used to print when we are in the middle of evaluating
         error_temp_img = 0  # Error for one template. How displaced the sensed frame is from the actual one
 
         for i in range(templates_per_image):
             if i > int(templates_per_image / 2) and not is_middle:
-                print("Reached the middle of the image")
+                print("Evaluated half of the image")
                 is_middle = True
 
-            actual_x, actual_y = actual_match[i].split(',')
-            matched_matrix_and_location = find_target(img, temp[counter])
+            # Store both actual and sensed x and y
+            actual_x, actual_y, _ = actual_match[i].split(',')
+            sensed_x, sensed_y = find_target(img, temp[counter])
+
+            # Error for one template is the added absolute differences between x and y divided the number of pixels
             error_temp_img += float(
-                (np.abs(matched_matrix_and_location[1] - int(actual_x[counter])) + np.abs(matched_matrix_and_location[2] - int(actual_y[counter]))) / img_width * resize_value)
+                (np.abs(sensed_x - int(actual_x)) + np.abs(sensed_y - int(actual_y))) / img_width * img_height)
             counter += 1
-        error_img.append(error_temp_img / templates_per_image)
+        error_img.append(error_temp_img / templates_per_image)  # Error for a whole image tested with multiple templates
         print("Error for image {} : {}".format(int(counter / templates_per_image), error_temp_img / templates_per_image))
 
-
+    # Error for all images
     error = (sum(error_img) / num_of_images) * 100
 
     print("There is {}% error.".format(error))
 
-# ---------------------------------------------------------------------------------------------------------------------- #
+# -------------------------------------------------Main----------------------------------------------------------------- #
 
 
 # Set image directory
-images_directory = 'datasets/sources/source-less-features/cloudy'
-templates_directory = 'datasets/templates/templates-less-features/images'
-match_pos_path = 'datasets/templates/templates-less-features/less-features-loc.txt'
+images_directory = 'datasets/sources/source-diverse/blurred-cloudy'
+templates_directory = 'datasets/templates/templates-diverse/images'
+match_pos_path = 'datasets/templates/templates-diverse/dataset-diverse-loc.txt'
 
 # Append each image path into a list
 source_paths = [os.path.join(images_directory, image_path) for image_path in os.listdir(images_directory)]
@@ -127,6 +102,7 @@ templates_paths = [os.path.join(templates_directory, template_path) for template
 source_paths.sort()
 templates_paths.sort(key=lambda name: int(os.path.splitext(os.path.basename(name))[0]))
 
+# Print all paths to make sure everything is ok
 for elem in templates_paths:
     print(elem)
 
@@ -135,26 +111,17 @@ source_images = []
 for image_path in source_paths:
     source_images.append(cv.imread(image_path))
 
+# Read the templates
 templates = []
 for template_path in templates_paths:
     templates.append(cv.imread(template_path))
 
+# Read the txt file with the template's actual position
 match_pos_file = open(match_pos_path, 'r')
 actual_match_position = match_pos_file.readlines()
 
+# Evaluate the matching method. The method is hardcoded into the evaluation. This should be changed
 evaluate(source_images, templates, actual_match_position)
 
+
 # ---------------------------------------------------------------------------------------------------------------------- #
-
-
-# match_matrix_and_location = find_pixel_dx(processedImg, processedTemplate)
-#
-# print("Numpy array object {}.\n\nStarts at pixel no. {} on x axis.".format(match_matrix_and_location[0],
-#                                                                            match_matrix_and_location[1]))
-
-# Close the window when the user presses the ESC key
-# while True:
-#     if cv.waitKey(0) == 27:
-#         cv.destroyAllWindows()
-#         plt.close()
-#         break
