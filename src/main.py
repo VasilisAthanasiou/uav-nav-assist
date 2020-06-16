@@ -3,13 +3,21 @@ import numpy as np
 import os
 from scipy import ndimage
 
-
 # ---------------------------------------------Image Processing--------------------------------------------------------- #
 
-def process_image(src_img, resize=0.5, rotate=False, rot_deg=5):
+def process_image(src_img, resize=-1, rot_deg=0):
+    '''Applies image processing techniques on an image.
+
+    :param src_img: Image to be processed
+    :param resize: Resize value. Takes float values between 0 and 1.
+    :param rot_deg: Degrees that the image will be rotated
+    :return: Returns the processed image
+
+    '''
 
     # # Resize image
-    # res_img = cv.resize(src_img, None, fx=resize, fy=resize, interpolation=cv.INTER_CUBIC)
+    if resize != -1:
+        res_img = cv.resize(src_img, None, fx=resize, fy=resize, interpolation=cv.INTER_CUBIC)
 
     # Convert to grayscale
     gray_image = cv.cvtColor(src_img, cv.COLOR_BGR2GRAY)
@@ -30,7 +38,7 @@ def process_image(src_img, resize=0.5, rotate=False, rot_deg=5):
     processed_img = gray_image
 
     # Rotate the image
-    if rotate:
+    if rot_deg != 0:
         processed_img = ndimage.rotate(gray_image, rot_deg)
 
     return processed_img
@@ -41,6 +49,13 @@ def process_image(src_img, resize=0.5, rotate=False, rot_deg=5):
 
 # Returns the top left pixel location of the sensed template
 def find_target(src, temp):
+
+    '''Uses openCV's matchTemplate to find a desired target inside the source image.
+
+    :param src: Source image
+    :param temp: Template image
+    :return: Tuple containing the sensed target top left coordinates
+    '''
 
     temp_height, temp_width = temp.shape
     # Apply template matching
@@ -53,7 +68,19 @@ def find_target(src, temp):
 
 # ------------------------------------------ Statistical Analysis ------------------------------------------------------ #
 
-def evaluate(src, temp, actual_match, n_templates, resize_value=0.5, rotation=5):
+def evaluate(src, temp, actual_match, n_templates, resize_value=-1, rotation=0):
+
+    '''Performs the find_target() function for multiple source images on multiple templates, compares the results with
+    the locations in the actual_match list, calculates the displacent and finally; writes the results on a text file.
+
+    :param src: Source image
+    :param temp: Template image
+    :param actual_match: List of strings containing the correct coordinates for a give target
+    :param n_templates: Number of template images
+    :param resize_value: Resize value for process_image()
+    :param rotation: Rotation value for process_image()
+    :return: A well structured string containing the results of the experiment
+    '''
 
     error = float(0)  # Error for the whole set
     error_img = []  # Error for each image Sum(error for every template / number of templates)
@@ -100,7 +127,7 @@ def evaluate(src, temp, actual_match, n_templates, resize_value=0.5, rotation=5)
 
     result += ("There is {} pixel mean error.\n\n".format(error))
     return result
-# -------------------------------------------------Main----------------------------------------------------------------- #
+# ------------------------------------------------- Main --------------------------------------------------------------- #
 
 
 # Set image directory
