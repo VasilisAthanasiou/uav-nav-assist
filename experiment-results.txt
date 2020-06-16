@@ -1,0 +1,89 @@
+-------------- Results using 1deg rotation on source images on source-diverse dataset --------------
+Mean error for image 1 : 2.125px
+Mean error for image 2 : 2.1875px
+Mean error for image 3 : 2.0625px
+Mean error for image 4 : 2.25px
+Mean error for image 5 : 2.125px
+Mean error for image 6 : 2.3125px
+Mean error for image 7 : 17.4375px
+Mean error for image 8 : 2.5625px
+There is 4.1328125 pixel mean error.
+
+-------------- Results using 2deg rotation on source images on source-diverse dataset --------------
+Mean error for image 1 : 4.75px
+Mean error for image 2 : 5.375px
+Mean error for image 3 : 4.8125px
+Mean error for image 4 : 4.875px
+Mean error for image 5 : 5.4375px
+Mean error for image 6 : 5.5625px
+Mean error for image 7 : 48.5px
+Mean error for image 8 : 91.8125px
+There is 21.390625 pixel mean error.
+
+-------------- Results using 1deg rotation on blurred image on source-diverse dataset --------------
+Mean error for image 1 : 2.1875px
+Mean error for image 2 : 2.25px
+Mean error for image 3 : 1.8125px
+Mean error for image 4 : 2.125px
+Mean error for image 5 : 2.25px
+Mean error for image 6 : 2.375px
+Mean error for image 7 : 18.25px
+Mean error for image 8 : 141.75px
+There is 21.625 pixel mean error.
+
+-------------- Results using 2deg rotation on blurred image on source-diverse dataset --------------
+Mean error for image 1 : 4.9375px
+Mean error for image 2 : 5.3125px
+Mean error for image 3 : 4.75px
+Mean error for image 4 : 5.0px
+Mean error for image 5 : 49.1875px
+Mean error for image 6 : 5.4375px
+Mean error for image 7 : 155.125px
+Mean error for image 8 : 226.4375px
+There is 57.0234375 pixel mean error.
+
+-------------- Results using 1deg rotation on cloudy image on source-diverse dataset --------------
+Mean error for image 1 : 1.875px
+Mean error for image 2 : 2.125px
+Mean error for image 3 : 2.0625px
+Mean error for image 4 : 2.3125px
+Mean error for image 5 : 2.25px
+Mean error for image 6 : 2.25px
+Mean error for image 7 : 99.1875px
+Mean error for image 8 : 323.9375px
+There is 54.5 pixel mean error.
+
+-------------- Results using 2deg rotation on cloudy image on source-diverse dataset --------------
+Mean error for image 1 : 4.5px
+Mean error for image 2 : 5.25px
+Mean error for image 3 : 4.8125px
+Mean error for image 4 : 48.5px
+Mean error for image 5 : 55.4375px
+Mean error for image 6 : 55.125px
+Mean error for image 7 : 350.0625px
+Mean error for image 8 : 590.4375px
+There is 139.265625 pixel mean error.
+
+-------------- Results using 1deg rotation on both cloudy and blurred images on source-diverse dataset --------------
+Mean error for image 1 : 2.0px
+Mean error for image 2 : 2.0625px
+Mean error for image 3 : 1.8125px
+Mean error for image 4 : 2.25px
+Mean error for image 5 : 2.125px
+Mean error for image 6 : 2.25px
+Mean error for image 7 : 116.0625px
+Mean error for image 8 : 392.375px
+There is 65.1171875 pixel mean error.
+
+-------------- Results using 2deg rotation on both cloudy and blurred images on source-diverse dataset --------------
+Mean error for image 1 : 4.5px
+Mean error for image 2 : 5.125px
+Mean error for image 3 : 4.875px
+Mean error for image 4 : 87.3125px
+Mean error for image 5 : 55.5625px
+Mean error for image 6 : 55.0px
+Mean error for image 7 : 385.1875px
+Mean error for image 8 : 620.8125px
+There is 152.296875 pixel mean error.
+
+
