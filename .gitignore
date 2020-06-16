@@ -1,3 +1,7 @@
-datasets/templates/templates-diverse/
-datasets/templates/templates-x/
-datasets/templates/templates-less-features/images/
+<<<<<<< HEAD
+datasets/templates/
+datasets/testing/
+=======
+datasets/templates/
+datasets/testing/
+>>>>>>> develop
