@@ -5,13 +5,13 @@
 import cv2 as cv
 import os
 
-source_directory = 'datasets/sources/source-diverse/source'
-# templates_directory = 'datasets/templates/templates-diverse/images'
+source_directory = '../datasets/sources/source-less-features/source'
+templates_directory = '../datasets/templates/templates-less-features/images'
 crop_height = 200
 crop_width = 200
 
 # Open text file that will include image name and most left pixel
-file = open("datasets/templates/templates-diverse/dataset-diverse-loc.txt", "w")
+file = open("../datasets/templates/templates-less-features/less-features-loc.txt", "w")
 
 # Append each image path into a list
 source_paths = [os.path.join(source_directory, image_path) for image_path in os.listdir(source_directory)]
@@ -30,7 +30,7 @@ for img in images:
         for most_left_pixel in range(0, img_width - crop_width, crop_width):
             cropped_img = img[most_top_pixel:most_top_pixel + crop_height, most_left_pixel:most_left_pixel + crop_width]
             print(cropped_img.shape)
-            cv.imwrite('/home/haistudent/PycharmProjects/diphaiopencv/datasets/templates/templates-diverse/images/{}.png'.format(counter), cropped_img)
+            cv.imwrite('{}/{}.png'.format(templates_directory, counter), cropped_img)
             file.write("{},{},\n".format(most_left_pixel, most_top_pixel))
             counter += 1
 

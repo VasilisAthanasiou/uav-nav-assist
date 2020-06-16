@@ -1,5 +1,3 @@
 
-=python:S125Q"Remove this commented out code.(ÿý’ÿ8°ýž¼«.
-npython:S1854`"JRemove this assignment to local variable 'error'; the value is never used.(‹ß†¼ýÿÿÿÿ8·á«¸«.
->python:S125¨"Remove this commented out code.(ŠÀÌ“8íØÀµ«.
-Opython:S1481N"0Remove the unused local variable "bottom_right".(ÕÏ‹É8°ýž¼«.
+jpython:S930|"LAdd 1 missing arguments; 'evaluate' expects at least 4 positional arguments.(‰§¶Š8¯Õ®¾«.
+npython:S18545"JRemove this assignment to local variable 'error'; the value is never used.(‹ß†¼ýÿÿÿÿ8·á«¸«.

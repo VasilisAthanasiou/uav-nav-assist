@@ -7,3 +7,5 @@ C
 testdatasetdata.txt,8/e/8ee30536acbd2ce21b25fab8f09d9d65a89aff69
 p
 @datasets/templates/templates-less-features/less-features-loc.txt,3/9/39511cb34fa32000b13a3cdb9f63eb8584c80369
+l
+<datasets/templates/templates-diverse/dataset-diverse-loc.txt,0/2/02342e796660f63c0477507ccf37fd131f256b79
