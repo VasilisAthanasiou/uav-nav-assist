@@ -122,5 +122,4 @@ actual_match_position = match_pos_file.readlines()
 # Evaluate the matching method. The method is hardcoded into the evaluation. This should be changed
 evaluate(source_images, templates, actual_match_position, 16)
 
-
 # ---------------------------------------------------------------------------------------------------------------------- #
