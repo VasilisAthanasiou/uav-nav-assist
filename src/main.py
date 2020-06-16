@@ -15,25 +15,12 @@ def process_image(src_img, resize=-1, rot_deg=0):
 
     '''
 
-    # # Resize image
+    # Resize image
     if resize != -1:
         res_img = cv.resize(src_img, None, fx=resize, fy=resize, interpolation=cv.INTER_CUBIC)
 
     # Convert to grayscale
     gray_image = cv.cvtColor(src_img, cv.COLOR_BGR2GRAY)
-
-    # # Remove noise
-    # gray_image = cv.blur(gray_image, (5, 5), gray_image)
-    #
-    # # Binarize image
-    # (thresh, bin_img) = cv.threshold(gray_image, 0, 255, cv.THRESH_BINARY + cv.THRESH_OTSU)
-    #
-    # # Erode binary image
-    # kernel = np.ones((2, 2), np.uint8)
-    # bin_img = cv.morphologyEx(bin_img, cv.MORPH_OPEN, kernel)
-    #
-    # # Dilate binary image
-    # bin_img = cv.morphologyEx(bin_img, cv.MORPH_CLOSE, kernel)
 
     processed_img = gray_image
 
@@ -89,7 +76,7 @@ def evaluate(src, temp, actual_match, n_templates, resize_value=-1, rotation=0):
     counter = 0  # Keeps track of each iterations
     result = ''
 
-    for img in src:  # For every image
+    for img in src:
         img_height, img_width, _ = img.shape
         template_height, template_width, _ = temp[counter].shape
 
