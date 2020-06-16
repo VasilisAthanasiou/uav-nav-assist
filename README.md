@@ -1,9 +1,9 @@
 # Problem definition
 This project's goal is to create a system that will efficiently perform **Optical Odometry** using a **Scene Matching Correlator**, for UAV guidance.
 The finished program will take two images (one large source image, and one smaller template image) and should successfully be able to :
-.1 Transform the template image, to match the orrientation of the source image. This inludes, rotational and perspective tranformations.
-.2 Find the location of the template image inside the source image. 
-.3 Calculate the vertical and horizontal pixel displacement and convert it to coordinate difference
+1. Transform the template image, to match the orrientation of the source image. This inludes, rotational and perspective tranformations.
+2. Find the location of the template image inside the source image. 
+3. Calculate the vertical and horizontal pixel displacement and convert it to coordinate difference
 
 Note : Before the program is considered operational, it should be tested in various datasets, that will include added noise and tranformations
 
