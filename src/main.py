@@ -2,6 +2,7 @@ import cv2 as cv
 import numpy as np
 import os
 from scipy import ndimage
+from matplotlib import pyplot as plt
 
 # ---------------------------------------------Image Processing--------------------------------------------------------- #
 
@@ -55,7 +56,7 @@ def find_target(src, temp):
 
 # ------------------------------------------ Statistical Analysis ------------------------------------------------------ #
 
-def evaluate(src, temp, actual_match, n_templates, resize_value=-1, rotation=0):
+def evaluate(src, temp, actual_match, n_templates, res_type, resize_value=-1, rotation=0, title=''):
 
     '''Performs the find_target() function for multiple source images on multiple templates, compares the results with
     the locations in the actual_match list, calculates the displacent and finally; writes the results on a text file.
@@ -64,9 +65,10 @@ def evaluate(src, temp, actual_match, n_templates, resize_value=-1, rotation=0):
     :param temp: Template image
     :param actual_match: List of strings containing the correct coordinates for a give target
     :param n_templates: Number of template images
+    :param res_type : Type of result to be return. Either 'text' or 'data'
     :param resize_value: Resize value for process_image()
     :param rotation: Rotation value for process_image()
-    :return: A well structured string containing the results of the experiment
+    :return: A well structured string containing the results of the experiment or a tuple of the resulting data
     '''
 
     error = float(0)  # Error for the whole set
@@ -91,7 +93,7 @@ def evaluate(src, temp, actual_match, n_templates, resize_value=-1, rotation=0):
         for i in range(templates_per_image):
             # Store both actual and sensed x and y
             actual_x, actual_y, _ = actual_match[i].split(',')
-            sensed_x, sensed_y = find_target(processed_img, process_image(temp[counter], rotate=True, rot_deg=rotation))
+            sensed_x, sensed_y = find_target(processed_img, process_image(temp[counter], rot_deg=rotation))
 
             # DEBUG
             # cv.imshow('Template', process_image(temp[counter], rotate=True, rot_deg=rotation))
@@ -111,9 +113,13 @@ def evaluate(src, temp, actual_match, n_templates, resize_value=-1, rotation=0):
 
     # Error for all images
     error = sum(error_img)/num_of_images
-
     result += ("There is {} pixel mean error.\n\n".format(error))
-    return result
+
+    if res_type == 'text':
+        return result
+    if res_type == 'data':
+        return ['{}'.format(counter + 1) for counter in range(len(error_img))], [error_img[counter] for counter in range(len(error_img))], error, title
+
 # ------------------------------------------------- Main --------------------------------------------------------------- #
 
 
@@ -122,9 +128,16 @@ images_directory = '../datasets/sources/source-diverse/source'
 templates_directory = '../datasets/templates/templates-diverse/images'
 match_pos_path = '../datasets/templates/templates-diverse/dataset-diverse-loc.txt'
 
+# Read the txt file with the template's actual position
+match_pos_file = open(match_pos_path, 'r')
+actual_match_position = match_pos_file.readlines()
+
 # Append each image path into a list
 source_paths = [os.path.join(images_directory, image_path) for image_path in os.listdir(images_directory)]
 templates_paths = [os.path.join(templates_directory, template_path) for template_path in os.listdir(templates_directory)]
+
+
+
 source_paths.sort()
 templates_paths.sort(key=lambda name: int(os.path.splitext(os.path.basename(name))[0]))
 
@@ -143,14 +156,31 @@ templates = []
 for template_path in templates_paths:
     templates.append(cv.imread(template_path))
 
-# Read the txt file with the template's actual position
-match_pos_file = open(match_pos_path, 'r')
-actual_match_position = match_pos_file.readlines()
+
+
+
 
 # Evaluate the matching method. The method is hardcoded into the evaluation. This should be changed
-result_text = evaluate(source_images, templates, actual_match_position, 16, rotation=2)
+# result_text = evaluate(source_images, templates, actual_match_position, 20, rotation=1)
 
 # Write the experiment results on a text file
-file = open("experiment-results.txt", "a")
-file.write("-------------- Results using 2deg rotation on source images --------------\n{}".format(result_text))
+# file = open("../experiment-results.txt", "a")
+# file.write("-------------- Results using 1deg rotation on source images on less-features dataset --------------\n{}".format(result_text))
+
+# Draw plots
+rot = 1
+results = evaluate(source_images, templates, actual_match_position, 16, 'data', rotation=rot, title='Diverse Dataset source with {} degree(s) rotation'.format(rot))
+
+print(results)
+
+plt.figure(figsize=(18, 8))
+plt.bar(results[0], results[1])
+plt.title(results[3])
+plt.xlabel('Images')
+plt.ylabel('Mean pixel error')
+plt.axis([0, 48, 0, 700])
+ax = plt.gca()
+ax.set_axisbelow(True)
+plt.gca().yaxis.grid(linestyle="dashed")
+plt.show()
 # ---------------------------------------------------------------------------------------------------------------------- #
