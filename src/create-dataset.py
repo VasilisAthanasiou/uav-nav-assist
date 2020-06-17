@@ -38,7 +38,3 @@ for img in images:
 
 
 
-
-
-
-

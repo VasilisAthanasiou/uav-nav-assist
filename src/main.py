@@ -95,13 +95,6 @@ def evaluate(src, temp, actual_match, n_templates, res_type, resize_value=-1, ro
             actual_x, actual_y, _ = actual_match[i].split(',')
             sensed_x, sensed_y = find_target(processed_img, process_image(temp[counter], rot_deg=rotation))
 
-            # DEBUG
-            # cv.imshow('Template', process_image(temp[counter], rotate=True, rot_deg=rotation))
-            # while True:
-            #     if cv.waitKey(1) == 27:
-            #         cv.destroyAllWindows()
-            #         break
-
             # Error for one template is the added absolute differences between x and y divided the number of pixels
             error_temp_img += np.abs(int(sensed_x) - int(actual_x)) + np.abs(int(sensed_y) - int(actual_y))
             counter += 1
@@ -118,13 +111,13 @@ def evaluate(src, temp, actual_match, n_templates, res_type, resize_value=-1, ro
     if res_type == 'text':
         return result
     if res_type == 'data':
-        return ['{}'.format(counter + 1) for counter in range(len(error_img))], [error_img[counter] for counter in range(len(error_img))], error, title
+        return ['{}'.format(counter + 1) for counter in range(len(error_img))], [round(error_img[counter], 2) for counter in range(len(error_img))], error, title
 
 # ------------------------------------------------- Main --------------------------------------------------------------- #
 
 
 # Set image directory
-images_directory = '../datasets/sources/source-diverse/source'
+images_directory = '../datasets/sources/source-diverse'
 templates_directory = '../datasets/templates/templates-diverse/images'
 match_pos_path = '../datasets/templates/templates-diverse/dataset-diverse-loc.txt'
 
@@ -132,55 +125,69 @@ match_pos_path = '../datasets/templates/templates-diverse/dataset-diverse-loc.tx
 match_pos_file = open(match_pos_path, 'r')
 actual_match_position = match_pos_file.readlines()
 
-# Append each image path into a list
+# Append all the paths into lists
 source_paths = [os.path.join(images_directory, image_path) for image_path in os.listdir(images_directory)]
-templates_paths = [os.path.join(templates_directory, template_path) for template_path in os.listdir(templates_directory)]
-
-
-
 source_paths.sort()
+
+templates_paths = [os.path.join(templates_directory, template_path) for template_path in os.listdir(templates_directory)]
 templates_paths.sort(key=lambda name: int(os.path.splitext(os.path.basename(name))[0]))
-
-
-# Print all paths to make sure everything is ok
-for elem in templates_paths:
-    print(elem)
-
-# Read the images
-source_images = []
-for image_path in source_paths:
-    source_images.append(cv.imread(image_path))
 
 # Read the templates
 templates = []
 for template_path in templates_paths:
     templates.append(cv.imread(template_path))
 
+# Print all paths to make sure everything is ok
+for elem in templates_paths:
+    print(elem)
 
+categories = ['Source', 'Blurred', 'Cloudy', 'Blurred and Cloudy']
+results = []
+counter = 0
 
+# Evaluate all variations of the source imagery
+for directory in source_paths:
 
+    for rot in range(1, 3):
+        file_path = [os.path.join(directory, image_path) for image_path in os.listdir(directory)]
+        file_path.sort()
 
-# Evaluate the matching method. The method is hardcoded into the evaluation. This should be changed
-# result_text = evaluate(source_images, templates, actual_match_position, 20, rotation=1)
+        # Read the images
+        source_images = []
+        for image_path in file_path:
+            source_images.append(cv.imread(image_path))
 
-# Write the experiment results on a text file
-# file = open("../experiment-results.txt", "a")
-# file.write("-------------- Results using 1deg rotation on source images on less-features dataset --------------\n{}".format(result_text))
+        results.append(evaluate(source_images, templates, actual_match_position, 16, 'data', rotation=rot, title='Diverse Dataset {} with {} degree(s) rotation'.format(categories[counter], rot)))
+    counter += 1
+    source_images.clear()
 
-# Draw plots
-rot = 1
-results = evaluate(source_images, templates, actual_match_position, 16, 'data', rotation=rot, title='Diverse Dataset source with {} degree(s) rotation'.format(rot))
+    # Evaluate the matching method. The method is hardcoded into the evaluation. This should be changed
+    # result_text = evaluate(source_images, templates, actual_match_position, 20, rotation=1)
+
+    # Write the experiment results on a text file
+    # file = open("../experiment-results.txt", "a")
+    # file.write("-------------- Results using 1deg rotation on source images on less-features dataset --------------\n{}".format(result_text))
+
+    # Draw plots
 
 print(results)
 
-plt.figure(figsize=(18, 8))
-plt.bar(results[0], results[1])
-plt.title(results[3])
-plt.xlabel('Images')
-plt.ylabel('Mean pixel error')
-plt.axis([0, 48, 0, 700])
-ax = plt.gca()
-ax.set_axisbelow(True)
-plt.gca().yaxis.grid(linestyle="dashed")
-plt.show()
+
+colors = ['b', 'g', 'r', 'c', 'm', 'y', '#3277a8', '#a87332', '#915e49']
+counter = 0
+for result in results:
+    fig = plt.figure(counter)
+    plt.bar(result[0], result[1], color=colors[counter])
+    for index, value in enumerate(result[1]):
+        plt.text(index, value, str(value))
+
+    plt.xlabel('Images')
+    plt.ylabel('Mean pixel error')
+    plt.axis([0, 8, 0, 700])
+    ax = plt.gca()
+    ax.set_axisbelow(True)
+    plt.gca().yaxis.grid(linestyle="dashed")
+    plt.show()
+    counter += 1
+
 # ---------------------------------------------------------------------------------------------------------------------- #
