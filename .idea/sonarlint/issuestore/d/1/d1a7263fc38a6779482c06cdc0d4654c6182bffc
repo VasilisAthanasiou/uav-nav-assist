@@ -1,5 +1,4 @@
 
-Opython:S1481"+Remove the unused local variable "res_img".(®­ÓÄÿÿÿÿÿ8´¦‹æ«.
-=python:S125b"Remove this commented out code.( µÉ¶8Ø’øå«.
-kpython:S107;"MFunction "evaluate" has 8 parameters, which is greater than the 7 authorized.(¾ÉÃ¯8œì¸‰¬.
 npython:S1854J"JRemove this assignment to local variable 'error'; the value is never used.(‹ß†¼ýÿÿÿÿ8ú®¹ˆ¬.
+Opython:S1481"+Remove the unused local variable "res_img".(®­ÓÄÿÿÿÿÿ8´¦‹æ«.
+kpython:S107;"MFunction "evaluate" has 8 parameters, which is greater than the 7 authorized.(¾ÉÃ¯8œì¸‰¬.
