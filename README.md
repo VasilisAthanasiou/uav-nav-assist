@@ -18,9 +18,6 @@ The create-dataset.py file uses a sources, templates, and actual-location.txt pa
 #
 ### Template Matching
 
--[Template matching wiki](https://en.wikipedia.org/wiki/Template_matching)
--[Template matching OpenCV](https://docs.opencv.org/2.4/doc/tutorials/imgproc/histograms/template_matching/template_matching.html)
--[Template matching source code](https://github.com/opencv/opencv/blob/master/modules/imgproc/src/templmatch.cpp)
-
-
-#
+- [Template matching wiki](https://en.wikipedia.org/wiki/Template_matching)
+- [Template matching OpenCV](https://docs.opencv.org/2.4/doc/tutorials/imgproc/histograms/template_matching/template_matching.html)
+- [Template matching source code](https://github.com/opencv/opencv/blob/master/modules/imgproc/src/templmatch.cpp)
