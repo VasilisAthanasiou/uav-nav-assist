@@ -1,11 +1,13 @@
-# Problem definition
-This project's goal is to create a system that will efficiently perform **Optical Odometry** using a **Scene Matching Correlator**, for UAV guidance.
-The finished program will take two images (one large source image, and one smaller template image) and should successfully be able to :
-1. Transform the template image, to match the orrientation of the source image. This inludes, rotational and perspective tranformations.
-2. Find the location of the template image inside the source image. 
-3. Calculate the vertical and horizontal pixel displacement and convert it to coordinate difference
+# Abstract
+This project's uses OpenCV's Template Matching to match one satellite image and one UAV image and find where the image taken by the drone is relative to the satellite image
 
-Note : Before the program is considered operational, it should be tested in various datasets, that will include added noise and tranformations
+Note : This program has been tested on a varriaty of images, containing different amount of features, noise and blur.
+
+# Project Guide
+-datasets : Contains a sources and a templates directory. Images from these directories can be linked inside main.py to produce experimentS. Sources contain "satellite" images taken from Google Maps, and some of them were edited in GIMP to add noise to them like clouds and Gaussian blur
+-report : Contains images, plots, and documents that describe the project's use case and analizes it's performance from data produced by src/create-dataset.py and evaluated in src/main.py
+-src : Contains the source code of the project. The main.py file reads two images and calls `find_target()`, which uses `cv2.matchTemplate()` to find where the template image is located on the source image. The sensed locations are stored in a variable, checked against a txt file located at datasets/templates/'template dataset name' and evaluated using the `evaluate()` method. Finally the results are plotted.
+The create-dataset.py file uses a sources, templates, and actual-location.txt path and crop the all the images in source into smaller 200x200 pixel images. While the images are being cropped, the top-left coordinate of the sub-image is written in the actual-location.txt file, so it can be used in `main.py::evaluate()`
 
 # Project resources
 
@@ -14,14 +16,11 @@ Note : Before the program is considered operational, it should be tested in vari
  - [DSMAC : Image Processing for Tomahawk scene matching](https://www.jhuapl.edu/Content/techdigest/pdf/V15-N03/15-03-Irani.pdf)
  
 #
-### Visual Odometry
+### Template Matching
 
-- [Visual Odometry and Visual SLAM Overview](https://link.springer.com/article/10.1007/s40903-015-0032-7)
-- [Lucas-Kanade Optical Flow : OpenCV](https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_video/py_lucas_kanade/py_lucas_kanade.html)
+-[Template matching wiki](https://en.wikipedia.org/wiki/Template_matching)
+-[Template matching OpenCV](https://docs.opencv.org/2.4/doc/tutorials/imgproc/histograms/template_matching/template_matching.html)
+-[Template matching source code](https://github.com/opencv/opencv/blob/master/modules/imgproc/src/templmatch.cpp)
+
 
 #
-### Tools and Methods
-
-- [Template Matching : OpenCV](https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_imgproc/py_template_matching/py_template_matching.html)
-
-## Setup guide
