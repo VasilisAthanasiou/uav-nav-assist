@@ -2,6 +2,7 @@ import cv2 as cv
 import numpy as np
 import os
 from scipy import ndimage
+
 from matplotlib import pyplot as plt
 
 # ---------------------------------------------Image Processing--------------------------------------------------------- #
@@ -45,10 +46,12 @@ def find_target(src, temp):
     :return: Tuple containing the sensed target top left coordinates
     '''
 
-    temp_height, temp_width = temp.shape
     # Apply template matching
     res = cv.matchTemplate(src, temp, cv.TM_CCOEFF)
     min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
+
+    # Print the top-left position of the template inside the src
+    print("TEMPLATE LOCATION = {}".format(max_loc))
 
     return max_loc  # Return top left position
 
@@ -114,34 +117,112 @@ def evaluate(src, temp, actual_match, n_templates, res_type, resize_value=-1, ro
         return ['{}'.format(counter + 1) for counter in range(len(error_img))], [round(error_img[counter], 2) for counter in range(len(error_img))], error, title
 # ---------------------------------------------------------------------------------------------------------------------- #
 
+# ----------------------------------------------- Simulation ----------------------------------------------------------- #
+def simulate(sat_images, sim_uav_images, d_error=400, dx_bias='right', dy_bias='down', insertion_rot=45, capture_dim=200):
+    """Runs a flight simulation.
+
+    Args:
+        sat_images: Set of satellite images, that represent images stored on the UAV
+        sim_uav_images : Set of images that
+        d_error: Displacement error. The error caused by the INS inaccuracy
+        dx_bias: Direction of the horizontal error. Is always fixed for a give type of inertial system
+        dy_bias: Direction of the vertical error. Is always fixed for a given type of inertial system
+        insertion_rot: Inclination from which the UAV will be inserted into the satellite image.
+        capture_dim: Dimension of image captured by the UAV
+    Returns:
+
+    """
+
+    # Initialize variables
+    displace_x = {'left': -d_error, 'right': d_error}
+    displace_y = {'down': -d_error, 'up': d_error}
+    heading = insertion_rot
+
+
+    # Simulation loop
+    for index in range(len(sat_images)):
+        # Set center of satellite image
+        sat_image_center = (int(sat_images[index].shape[0]/2), int(sat_images[index].shape[1]/2))
+        print('Satellite image center : {}'.format(sat_image_center))
+
+        # Process the UAV image
+        uav_processed_image = cv.cvtColor(sim_uav_images[index], cv.COLOR_BGR2GRAY)
+        cv.imshow('Gray image', uav_processed_image)  # Will probably produce error
+
+        # Simulate heading errors
+        inertial_error = np.random.uniform(0, 1)
+        uav_processed_image = ndimage.rotate(uav_processed_image, heading + inertial_error)
+        print('The INS made a {} degree error'.format(inertial_error))
+
+        # Capturing and rotating image
+        captured_img = uav_processed_image[displace_x[dx_bias]:displace_x[dx_bias]+capture_dim, displace_y[dy_bias]:displace_y[dy_bias]+capture_dim]
+        cv.imshow('Captured image', captured_img)  # Will probably produce error
+        while True:
+            if cv.waitKey(1) == 27:
+                cv.destroyAllWindows()
+                break
+        print('INS : {} degrees insertion angle\nRotating image accordingly...'.format(heading))
+        captured_img = ndimage.rotate(captured_img, -heading)
+        print('Captured ground image of size {}x{}'.format(captured_img.shape[0], captured_img.shape[1]))
+
+        captured_img = captured_img[int(captured_img.shape[0]/4):int(captured_img.shape[0]/4) + int(captured_img.shape[0]/2), int(captured_img.shape[1]/4):int(captured_img.shape[1]/4) + int(captured_img.shape[1]/2)]
+        cv.imshow('INS corrected captured image', captured_img)
+        while True:
+            if cv.waitKey(1) == 27:
+                cv.destroyAllWindows()
+                break
+        # Find where the captured image is located relative to the satellite image
+        captured_image_location = find_target(sat_images[index], captured_img)  # Top-left location of the template image
+        print("DEBUG : captured_image_location={}".format(captured_image_location))
+        # Define center of captured image inside the satellite image
+        captured_image_center = (captured_image_location[0] + (capture_dim / 2), captured_image_location[1] + (capture_dim / 2))
+        print("DEBUG : captured_image_center={}".format(captured_image_center))
+
+        # Send the course correction signal
+        course_displacement = sat_image_center[0] - captured_image_center[0], sat_image_center[1] - captured_image_center[1]
+        print('The UAV is off center {} meters to the {} and {} meters {}'.format(course_displacement[0], dx_bias, course_displacement[1], dy_bias))
+
+
+# ---------------------------------------------------------------------------------------------------------------------- #
 
 # ------------------------------------------------- Main --------------------------------------------------------------- #
 
-
 # Set image directory
-images_directory = '../datasets/sources/source-diverse'
-templates_directory = '../datasets/templates/templates-diverse/images'
-match_pos_path = '../datasets/templates/templates-diverse/dataset-diverse-loc.txt'
+sat_directory = '../datasets/sources/source-diverse/1.source'
+uav_directory = '../datasets/sources/source-diverse/4.blurred-cloudy'
+# templates_directory = '../datasets/templates/templates-diverse/images'
+# match_pos_path = '../datasets/templates/templates-diverse/dataset-diverse-loc.txt'
+#
+# # Read the txt file with the template's actual position
+# match_pos_file = open(match_pos_path, 'r')
+# actual_match_position = match_pos_file.readlines()
 
-# Read the txt file with the template's actual position
-match_pos_file = open(match_pos_path, 'r')
-actual_match_position = match_pos_file.readlines()
+# Append all  the paths into lists
+sat_paths = [os.path.join(sat_directory, image_path) for image_path in os.listdir(sat_directory)]
+sat_paths.sort()
 
-# Append all the paths into lists
-source_paths = [os.path.join(images_directory, image_path) for image_path in os.listdir(images_directory)]
-source_paths.sort()
+# Append UAV paths
+uav_paths = [os.path.join(uav_directory, image_path) for image_path in os.listdir(uav_directory)]
+uav_paths.sort()
 
-templates_paths = [os.path.join(templates_directory, template_path) for template_path in os.listdir(templates_directory)]
-templates_paths.sort(key=lambda name: int(os.path.splitext(os.path.basename(name))[0]))
+# templates_paths = [os.path.join(templates_directory, template_path) for template_path in os.listdir(templates_directory)]
+# templates_paths.sort(key=lambda name: int(os.path.splitext(os.path.basename(name))[0]))
 
-# Read the templates
-templates = []
-for template_path in templates_paths:
-    templates.append(cv.imread(template_path))
+# Read the satellite images
+sat_images = []
+gray_sat_images = []
+for sat_path in sat_paths:
+    sat_images.append(cv.cvtColor(cv.imread(sat_path), cv.COLOR_BGR2GRAY))
+# Read the uav images
+uav_images = []
+for uav_path in uav_paths:
+    uav_images.append(cv.imread(uav_path))
 
 # Print all paths to make sure everything is ok
-for elem in templates_paths:
+for elem in uav_paths:
     print(elem)
+
+simulate(sat_images, uav_images)
 
 # categories = ['Source', 'Blurred', 'Cloudy', 'Blurred and Cloudy']
 # results = []
