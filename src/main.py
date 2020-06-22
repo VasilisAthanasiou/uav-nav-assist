@@ -59,7 +59,7 @@ def find_target(src, temp):
 def evaluate(src, temp, actual_match, n_templates, res_type, resize_value=-1, rotation=0, title=''):
 
     '''Performs the find_target() function for multiple source images on multiple templates, compares the results with
-    the locations in the actual_match list, calculates the displacent and finally; writes the results on a text file.
+    the locations in the actual_match list, calculates the displacement and finally; writes the results on a text file.
 
     :param src: Source image
     :param temp: Template image
@@ -112,6 +112,8 @@ def evaluate(src, temp, actual_match, n_templates, res_type, resize_value=-1, ro
         return result
     if res_type == 'data':
         return ['{}'.format(counter + 1) for counter in range(len(error_img))], [round(error_img[counter], 2) for counter in range(len(error_img))], error, title
+# ---------------------------------------------------------------------------------------------------------------------- #
+
 
 # ------------------------------------------------- Main --------------------------------------------------------------- #
 
@@ -141,25 +143,25 @@ for template_path in templates_paths:
 for elem in templates_paths:
     print(elem)
 
-categories = ['Source', 'Blurred', 'Cloudy', 'Blurred and Cloudy']
-results = []
-counter = 0
+# categories = ['Source', 'Blurred', 'Cloudy', 'Blurred and Cloudy']
+# results = []
+# counter = 0
 
-# Evaluate all variations of the source imagery
-for directory in source_paths:
-
-    for rot in range(1, 3):
-        file_path = [os.path.join(directory, image_path) for image_path in os.listdir(directory)]
-        file_path.sort()
-
-        # Read the images
-        source_images = []
-        for image_path in file_path:
-            source_images.append(cv.imread(image_path))
-
-        results.append(evaluate(source_images, templates, actual_match_position, 16, 'data', rotation=rot, title='Diverse Dataset {} with {} degree(s) rotation'.format(categories[counter], rot)))
-    counter += 1
-    source_images.clear()
+# # Evaluate all variations of the source imagery
+# for directory in source_paths:
+#
+#     for rot in range(1, 3):
+#         file_path = [os.path.join(directory, image_path) for image_path in os.listdir(directory)]
+#         file_path.sort()
+#
+#         # Read the images
+#         source_images = []
+#         for image_path in file_path:
+#             source_images.append(cv.imread(image_path))
+#
+#         results.append(evaluate(source_images, templates, actual_match_position, 16, 'data', rotation=rot, title='Diverse Dataset {} with {} degree(s) rotation'.format(categories[counter], rot)))
+#     counter += 1
+#     source_images.clear()
 
     # Evaluate the matching method. The method is hardcoded into the evaluation. This should be changed
     # result_text = evaluate(source_images, templates, actual_match_position, 20, rotation=1)
@@ -170,24 +172,23 @@ for directory in source_paths:
 
     # Draw plots
 
-print(results)
-
-
-colors = ['b', 'g', 'r', 'c', 'm', 'y', '#3277a8', '#a87332', '#915e49']
-counter = 0
-for result in results:
-    fig = plt.figure(counter)
-    plt.bar(result[0], result[1], color=colors[counter])
-    for index, value in enumerate(result[1]):
-        plt.text(index, value, str(value))
-
-    plt.xlabel('Images')
-    plt.ylabel('Mean pixel error')
-    plt.axis([0, 8, 0, 700])
-    ax = plt.gca()
-    ax.set_axisbelow(True)
-    plt.gca().yaxis.grid(linestyle="dashed")
-    plt.show()
-    counter += 1
+# print(results)
+#
+# colors = ['b', 'g', 'r', 'c', 'm', 'y', '#3277a8', '#a87332', '#915e49']
+# counter = 0
+# for result in results:
+#     fig = plt.figure(counter)
+#     plt.bar(result[0], result[1], color=colors[counter])
+#     for index, value in enumerate(result[1]):
+#         plt.text(index, value, str(value))
+#
+#     plt.xlabel('Images')
+#     plt.ylabel('Mean pixel error')
+#     plt.axis([0, 8, 0, 700])
+#     ax = plt.gca()
+#     ax.set_axisbelow(True)
+#     plt.gca().yaxis.grid(linestyle="dashed")
+#     plt.show()
+#     counter += 1
 
 # ---------------------------------------------------------------------------------------------------------------------- #
