@@ -1,52 +1,43 @@
 import cv2 as cv
 import numpy as np
 import os
-#from scipy import ndimage
 import imutils
-
 from matplotlib import pyplot as plt
 
 
-# ---------------------------------------------Image Processing--------------------------------------------------------- #
+# --------------------------------------------- Image Processing --------------------------------------------------------- #
 
-def process_image(src_img, resize=-1, rot_deg=0):
-    '''Applies image processing techniques on an image.
+def process_image(src_img, rot_deg=0):
+    """Applies image processing techniques on an image.
 
     :param src_img: Image to be processed
-    :param resize: Resize value. Takes float values between 0 and 1.
     :param rot_deg: Degrees that the image will be rotated
     :return: Returns the processed image
 
-    '''
-
-    # Resize image
-    if resize != -1:
-        res_img = cv.resize(src_img, None, fx=resize, fy=resize, interpolation=cv.INTER_CUBIC)
+    """
 
     # Convert to grayscale
-    gray_image = cv.cvtColor(src_img, cv.COLOR_BGR2GRAY)
-
-    processed_img = gray_image
+    processed_img = cv.cvtColor(src_img, cv.COLOR_BGR2GRAY)
 
     # Rotate the image
     if rot_deg != 0:
-        processed_img = ndimage.rotate(gray_image, rot_deg)
+        processed_img = imutils.rotate(processed_img, rot_deg)
 
     return processed_img
 
 
-# ---------------------------------------------------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------------------------------------------------------ #
 
-# ------------------------------------------ Matching Algorithm -------------------------------------------------------- #
+# ------------------------------------------ Matching Algorithm ---------------------------------------------------------- #
 
 # Returns the top left pixel location of the sensed template
-def find_target(src, temp):
-    '''Uses openCV's matchTemplate to find a desired target inside the source image.
+def findTarget(src, temp):
+    """Uses openCV's matchTemplate to find a desired target inside the source image.
 
     :param src: Source image
     :param temp: Template image
     :return: Tuple containing the sensed target top left coordinates
-    '''
+    """
 
     # Apply template matching
     res = cv.matchTemplate(src, temp, cv.TM_CCOEFF)
@@ -55,12 +46,12 @@ def find_target(src, temp):
     return max_loc  # Return top left position
 
 
-# ---------------------------------------------------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------------------------------------------------------ #
 
-# ------------------------------------------ Statistical Analysis ------------------------------------------------------ #
+# ------------------------------------------ Statistical Analysis -------------------------------------------------------- #
 
-def evaluate(src_dir, temp_dir, actual_match, n_templates, res_type, resize_value=-1, rotation=0, title=''):
-    '''Performs the find_target() function for multiple source images on multiple templates, compares the results with
+def evaluate(src_dir, temp_dir, actual_match, n_templates, res_type, resize_value=-1, rotation=0):
+    """Performs the find_target() function for multiple source images on multiple templates, compares the results with
     the locations in the actual_match list, calculates the displacement and finally; writes the results on a text file.
 
     :param src_dir: Source images directory
@@ -71,11 +62,11 @@ def evaluate(src_dir, temp_dir, actual_match, n_templates, res_type, resize_valu
     :param resize_value: Resize value for process_image()
     :param rotation: Rotation value for process_image()
     :return: A well structured string containing the results of the experiment or a tuple of the resulting data
-    '''
+    """
 
     # Append all  the paths into lists
     src_dir = [os.path.join(src_dir, image_path) for image_path in os.listdir(src_dir)]
-    sat_paths.sort()
+    src_paths.sort()
     # Templates paths
     templates_paths = [os.path.join(temp_dir, template_path) for template_path in os.listdir(temp_dir)]
     templates_paths.sort(key=lambda name: int(os.path.splitext(os.path.basename(name))[0]))
@@ -93,7 +84,6 @@ def evaluate(src_dir, temp_dir, actual_match, n_templates, res_type, resize_valu
     for path in temp:
         print(path)
 
-    error = float(0)  # Error for the whole set
     error_img = []  # Error for each image Sum(error for every template / number of templates)
     num_of_images = len(src)
 
@@ -115,7 +105,7 @@ def evaluate(src_dir, temp_dir, actual_match, n_templates, res_type, resize_valu
         for i in range(templates_per_image):
             # Store both actual and sensed x and y
             actual_x, actual_y, _ = actual_match[i].split(',')
-            sensed_x, sensed_y = find_target(processed_img, process_image(temp[counter], rot_deg=rotation))
+            sensed_x, sensed_y = findTarget(processed_img, process_image(temp[counter], rot_deg=rotation))
 
             # Error for one template is the added absolute differences between x and y divided the number of pixels
             error_temp_img += np.abs(int(sensed_x) - int(actual_x)) + np.abs(int(sensed_y) - int(actual_y))
@@ -133,12 +123,12 @@ def evaluate(src_dir, temp_dir, actual_match, n_templates, res_type, resize_valu
         return result
     if res_type == 'data':
         return ['{}'.format(counter + 1) for counter in range(len(error_img))], [round(error_img[counter], 2) for counter
-                                                                                 in range(len(error_img))], error, title
+                                                                                 in range(len(error_img))], error
 
 
-# ---------------------------------------------------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------------------------------------------------------ #
 
-# ----------------------------------------------- Simulation ----------------------------------------------------------- #
+# ----------------------------------------------- Simulation ------------------------------------------------------------- #
 def simulate(sat_images, sim_uav_images, d_error=100, dx_bias='East', dy_bias='South', heading=45, capture_dim=200):
     """Runs a flight simulation.
 
@@ -165,47 +155,45 @@ def simulate(sat_images, sim_uav_images, d_error=100, dx_bias='East', dy_bias='S
 
         # Set center of satellite image
         sat_image_center = (int(sat_images[index].shape[0] / 2), int(sat_images[index].shape[1] / 2))
-        print('Satellite image center : {}'.format(sat_image_center))
-
-        # Process the UAV image
-        uav_processed_image = cv.cvtColor(sim_uav_images[index], cv.COLOR_BGR2GRAY)
 
         # Simulate heading errors
         inertial_error = np.random.uniform(0, 2)
 
         # Rotate the image clockwise
-        uav_processed_image = imutils.rotate(uav_processed_image, heading + inertial_error)
+        uav_processed_image = imutils.rotate(sim_uav_images[index], heading + inertial_error)
         uav_prc_center = (int(uav_processed_image.shape[0] / 2), int(uav_processed_image.shape[1] / 2))
-        print('The INS made a {} degree error'.format(inertial_error))
+        print('The INS made a {} degree error\nPress ESC to continue'.format(inertial_error))
 
-        # Define center of captured image inside the satellite image
+        # Define center of captured image inside the rotated uav image
         capt_img_rotated_center = (uav_prc_center[0] + dx, uav_prc_center[1] + dy)
 
-        # Doing something wrong here
+        # Calculate the center of the captured image relative to the satellite source (uav_processed_image before rotation)
         x = capt_img_rotated_center[0]
         y = capt_img_rotated_center[1]
         p = uav_prc_center[0]
         q = uav_prc_center[1]
         theta = np.deg2rad(heading)
 
+        # Finding coordinates of capture center by
+        actual_capture_coord = (x - p) * np.cos(-theta) + (y - q) * np.sin(-theta) + p, -(x - p) * np.sin(-theta) + (
+                    y - q) * np.cos(-theta) + q
 
-        actual_capture_coord = (x - p) * np.cos(-theta) + (y - q) * np.sin(-theta) + p, -(x - p) * np.sin(-theta) + (y - q) * np.cos(
-            -theta) + q
+        # "Capturing" the UAV image by cropping the uav_processed_image
+        capt_top_left = (capt_img_rotated_center[0] - int(capture_dim / 2),
+                         capt_img_rotated_center[1] - int(capture_dim / 2))
 
-        # Capturing and rotating image
-        capt_top_left = (
-            capt_img_rotated_center[0] - int(capture_dim / 2), capt_img_rotated_center[1] - int(capture_dim / 2))
         captured_img = uav_processed_image[capt_top_left[1]:capt_top_left[1] + capture_dim,
                        capt_top_left[0]:capt_top_left[0] + capture_dim]
+
         cv.imshow('Captured image', captured_img)
         while True:
             if cv.waitKey(1) == 27:
                 cv.destroyAllWindows()
                 break
-        print('INS : {} degrees insertion angle\nRotating image accordingly...'.format(heading))
+        print('INS : {} degrees insertion angle\nRotating image accordingly...\nPress ESC to continue'.format(heading))
         captured_img = imutils.rotate(captured_img, -heading)
 
-        print('Captured ground image of size {}x{}'.format(captured_img.shape[0], captured_img.shape[1]))
+        # Crop the image to get rid of black areas caused by rotation
         captured_img = captured_img[
                        int(captured_img.shape[0] / 4):int(captured_img.shape[0] / 4) + int(captured_img.shape[0] / 2),
                        int(captured_img.shape[1] / 4):int(captured_img.shape[1] / 4) + int(captured_img.shape[1] / 2)]
@@ -216,52 +204,61 @@ def simulate(sat_images, sim_uav_images, d_error=100, dx_bias='East', dy_bias='S
                 break
 
         # Find where the captured image is located relative to the satellite image
-        captured_image_location = find_target(sat_images[index], captured_img)  # Top-left location of the template image
-        print("DEBUG : captured_image_location={}".format(captured_image_location))
+        captured_image_location = findTarget(sat_images[index], captured_img)  # Top-left location of the template image
 
         captured_img_center = (captured_image_location[0] + int(captured_img.shape[0] / 2),
                                captured_image_location[1] + int(captured_img.shape[1] / 2))
-        print('Captured image shape {}x{}'.format(captured_img.shape[0], captured_img.shape[1]))
 
         # Send the course correction signal
         course_displacement = captured_img_center[0] - sat_image_center[0], sat_image_center[1] - captured_img_center[1]
 
-        print('The UAV is off center {} meters horizontally and {} meters vertically\nAnd the error is {:.2f} meters horizontally and {:.2f} meters vertically\n\n'.format(
-                course_displacement[0],
-                course_displacement[1],
-                np.abs(captured_img_center[0] - actual_capture_coord[0]), np.abs(captured_img_center[1] - actual_capture_coord[1])))
+        print('The UAV is off center {} meters horizontally and {} meters vertically\n'
+              'And the error is {:.2f} meters horizontally and {:.2f} meters vertically\n\n'.format(
+            course_displacement[0], course_displacement[1],
+            np.abs(captured_img_center[0] - actual_capture_coord[0]),
+            np.abs(captured_img_center[1] - actual_capture_coord[1])))
 
 
-# ---------------------------------------------------------------------------------------------------------------------- #
+# ------------------------------------------------------------------------------------------------------------------------ #
 
-# ------------------------------------------------- Main --------------------------------------------------------------- #
+# ----------------------------------------------- Setup Data ------------------------------------------------------------- #
+
+def readImages(directory):
+    # Append all the paths into lists
+    img_paths = [os.path.join(directory, image_path) for image_path in os.listdir(directory)]
+    img_paths.sort()
+
+    # Print all paths to make sure everything is ok
+    for path in img_paths:
+        print(path)
+
+    return [cv.cvtColor(cv.imread(img_path), cv.COLOR_BGR2GRAY) for img_path in img_paths]
+
+
+# ------------------------------------------------------------------------------------------------------------------------ #
+
+# -------------------------------------------------- Main ---------------------------------------------------------------- #
 
 # Set image directory
-sat_directory = '../datasets/sources/source-diverse/1.source'
-uav_directory = '../datasets/sources/source-diverse/3.cloudy-images'
 
-# Append all  the paths into lists
-sat_paths = [os.path.join(sat_directory, image_path) for image_path in os.listdir(sat_directory)]
-sat_paths.sort()
+root_directory = '../datasets/sources/source-diverse'
+categories = ['1.source', '2.blurred', '3.cloudy-images', '4.blurred-cloudy']
 
-# Append UAV paths
-uav_paths = [os.path.join(uav_directory, image_path) for image_path in os.listdir(uav_directory)]
-uav_paths.sort()
+while True:
+    try:
+        sat_sel = int(input('Select satellite image source:\n1.source 2.blur 3.cloudy-images 4.blurred-cloudy\n\n'))
+        uav_sel = int(input('Select UAV image source:\n1.source 2.blur 3.cloudy-images 4.blurred-cloudy\n\n'))
+        head = int(input("Type in the UAV's heading : "))
+        dist = int(input("Type in the distance from the center. This will be applied on both axes :\n"))
+        break
+    except TypeError:
+        print('Please select an integer between 1-4')
 
-# Read the satellite images
-satellite_images = []
-for sat_path in sat_paths:
-    satellite_images.append(cv.cvtColor(cv.imread(sat_path), cv.COLOR_BGR2GRAY))
-# Read the uav images
-uav_images = []
-for uav_path in uav_paths:
-    uav_images.append(cv.imread(uav_path))
+sat_directory = '../datasets/sources/source-diverse/{}'.format(categories[sat_sel - 1])
+uav_directory = '../datasets/sources/source-diverse/{}'.format(categories[uav_sel - 1])
 
-# Print all paths to make sure everything is ok
-for elem in uav_paths:
-    print(elem)
+simulate(readImages(sat_directory), readImages(uav_directory), d_error=dist, heading=head)
 
-simulate(satellite_images, uav_images, d_error=100, heading=45)
 
 # --------------------------------- ADD EVERYTHING BELLOW THIS LINE INTO THE EVALUATE METHOD --------------------------- #
 # categories = ['Source', 'Blurred', 'Cloudy', 'Blurred and Cloudy']
