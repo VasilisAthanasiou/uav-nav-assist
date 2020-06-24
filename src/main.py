@@ -1,7 +1,8 @@
 import cv2 as cv
 import numpy as np
 import os
-from scipy import ndimage
+#from scipy import ndimage
+import imutils
 
 from matplotlib import pyplot as plt
 
@@ -171,14 +172,25 @@ def simulate(sat_images, sim_uav_images, d_error=100, dx_bias='East', dy_bias='S
 
         # Simulate heading errors
         inertial_error = np.random.uniform(0, 2)
-        uav_processed_image = ndimage.rotate(uav_processed_image,
-                                             -(heading + inertial_error))  # ndimage.rotate is flipped
+
+        # Rotate the image clockwise
+        uav_processed_image = imutils.rotate(uav_processed_image, heading + inertial_error)
         uav_prc_center = (int(uav_processed_image.shape[0] / 2), int(uav_processed_image.shape[1] / 2))
         print('The INS made a {} degree error'.format(inertial_error))
 
         # Define center of captured image inside the satellite image
         capt_img_rotated_center = (uav_prc_center[0] + dx, uav_prc_center[1] + dy)
-        print("DEBUG : captured_image_rotated_center={}".format(capt_img_rotated_center))
+
+        # Doing something wrong here
+        x = capt_img_rotated_center[0]
+        y = capt_img_rotated_center[1]
+        p = uav_prc_center[0]
+        q = uav_prc_center[1]
+        theta = np.deg2rad(heading)
+
+
+        actual_capture_coord = (x - p) * np.cos(-theta) + (y - q) * np.sin(-theta) + p, -(x - p) * np.sin(-theta) + (y - q) * np.cos(
+            -theta) + q
 
         # Capturing and rotating image
         capt_top_left = (
@@ -191,7 +203,7 @@ def simulate(sat_images, sim_uav_images, d_error=100, dx_bias='East', dy_bias='S
                 cv.destroyAllWindows()
                 break
         print('INS : {} degrees insertion angle\nRotating image accordingly...'.format(heading))
-        captured_img = ndimage.rotate(captured_img, heading)
+        captured_img = imutils.rotate(captured_img, -heading)
 
         print('Captured ground image of size {}x{}'.format(captured_img.shape[0], captured_img.shape[1]))
         captured_img = captured_img[
@@ -213,16 +225,6 @@ def simulate(sat_images, sim_uav_images, d_error=100, dx_bias='East', dy_bias='S
 
         # Send the course correction signal
         course_displacement = captured_img_center[0] - sat_image_center[0], sat_image_center[1] - captured_img_center[1]
-
-        # Doing something wrong here
-        x = captured_img_center[0]
-        y = captured_img_center[1]
-        p = sat_image_center[0]
-        q = sat_image_center[1]
-        theta = np.deg2rad(heading+inertial_error)
-
-        actual_capture_coord = (x - p) * np.cos(-theta) + (y - q) * np.sin(-theta) + p, -(x - p) * np.sin(-theta) + (y - q) * np.cos(
-            -theta) + q
 
         print('The UAV is off center {} meters horizontally and {} meters vertically\nAnd the error is {:.2f} meters horizontally and {:.2f} meters vertically\n\n'.format(
                 course_displacement[0],
