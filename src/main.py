@@ -17,7 +17,11 @@ def process_image(src_img, rot_deg=0):
     """
 
     # Convert to grayscale
-    processed_img = cv.cvtColor(src_img, cv.COLOR_BGR2GRAY)
+    try:
+        processed_img = cv.cvtColor(src_img, cv.COLOR_BGR2GRAY)
+    except cv.error:
+        # The image was probably already converted to grayscale
+        processed_img = src_img
 
     # Rotate the image
     if rot_deg != 0:
@@ -50,35 +54,18 @@ def findTarget(src, temp):
 
 # ------------------------------------------ Statistical Analysis -------------------------------------------------------- #
 
-def evaluate(src_dir, temp_dir, actual_match, n_templates, res_type, resize_value=-1, rotation=0):
+def evaluate(src, temp, actual_match, n_templates, res_type, rotation=0):
     """Performs the find_target() function for multiple source images on multiple templates, compares the results with
     the locations in the actual_match list, calculates the displacement and finally; writes the results on a text file.
 
-    :param src_dir: Source images directory
-    :param temp_dir: Template images directory
+    :param src: Source images list
+    :param temp: Template images list
     :param actual_match: List of strings containing the correct coordinates for a give target
     :param n_templates: Number of template images
     :param res_type : Type of result to be return. Either 'text' or 'data'
-    :param resize_value: Resize value for process_image()
     :param rotation: Rotation value for process_image()
     :return: A well structured string containing the results of the experiment or a tuple of the resulting data
     """
-
-    # Append all  the paths into lists
-    src_dir = [os.path.join(src_dir, image_path) for image_path in os.listdir(src_dir)]
-    src_paths.sort()
-    # Templates paths
-    templates_paths = [os.path.join(temp_dir, template_path) for template_path in os.listdir(temp_dir)]
-    templates_paths.sort(key=lambda name: int(os.path.splitext(os.path.basename(name))[0]))
-
-    # Read the source images
-    src = []
-    for src_path in src_dir:
-        src.append(cv.cvtColor(cv.imread(src_path)))
-    # Read the uav images
-    temp = []
-    for temp_path in temp_dir:
-        temp.append(cv.imread(temp_path))
 
     # Print all paths to make sure everything is ok
     for path in temp:
@@ -176,10 +163,10 @@ def simulate(sat_images, sim_uav_images, d_error=100, dx_bias='East', dy_bias='S
 
         # Finding coordinates of capture center by
         actual_capture_coord = (x - p) * np.cos(-theta) + (y - q) * np.sin(-theta) + p, -(x - p) * np.sin(-theta) + (
-                    y - q) * np.cos(-theta) + q
+                y - q) * np.cos(-theta) + q
 
         # "Capturing" the UAV image by cropping the uav_processed_image
-        capt_top_left = (capt_img_rotated_center[0] - int(capture_dim / 2),
+        capt_top_left = (capt_img_rotated_center[0] - int(capture_dim / 2),  # Top left pixel location of captured image
                          capt_img_rotated_center[1] - int(capture_dim / 2))
 
         captured_img = uav_processed_image[capt_top_left[1]:capt_top_left[1] + capture_dim,
@@ -223,6 +210,7 @@ def simulate(sat_images, sim_uav_images, d_error=100, dx_bias='East', dy_bias='S
 
 # ----------------------------------------------- Setup Data ------------------------------------------------------------- #
 
+# Reads images and converts them to grayscale
 def readImages(directory):
     # Append all the paths into lists
     img_paths = [os.path.join(directory, image_path) for image_path in os.listdir(directory)]
@@ -257,7 +245,12 @@ while True:
 sat_directory = '../datasets/sources/source-diverse/{}'.format(categories[sat_sel - 1])
 uav_directory = '../datasets/sources/source-diverse/{}'.format(categories[uav_sel - 1])
 
-simulate(readImages(sat_directory), readImages(uav_directory), d_error=dist, heading=head)
+cv.imshow('Image', process_image(readImages(sat_directory)[0]))
+while True:
+    if cv.waitKey(1) == 27:
+        cv.destroyAllWindows()
+        exit()
+# simulate(readImages(sat_directory), readImages(uav_directory), d_error=dist, heading=head)
 
 
 # --------------------------------- ADD EVERYTHING BELLOW THIS LINE INTO THE EVALUATE METHOD --------------------------- #
