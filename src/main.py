@@ -25,7 +25,7 @@ def process_image(src_img, rot_deg=0):
 
     # Rotate the image
     if rot_deg != 0:
-        processed_img = imutils.rotate(processed_img, rot_deg)
+        processed_img = imutils.rotate(processed_img, int(rot_deg))
 
     return processed_img
 
@@ -54,63 +54,87 @@ def findTarget(src, temp):
 
 # ------------------------------------------ Statistical Analysis -------------------------------------------------------- #
 
-def evaluate(src, temp, actual_match, n_templates, res_type, rotation=0):
+class Evaluator:
     """Performs the find_target() function for multiple source images on multiple templates, compares the results with
     the locations in the actual_match list, calculates the displacement and finally; writes the results on a text file.
 
     :param src: Source images list
     :param temp: Template images list
     :param actual_match: List of strings containing the correct coordinates for a give target
-    :param n_templates: Number of template images
-    :param res_type : Type of result to be return. Either 'text' or 'data'
     :param rotation: Rotation value for process_image()
     :return: A well structured string containing the results of the experiment or a tuple of the resulting data
     """
+    def __init__(self, src, temp, actual_match, rotation=0):
+        self.src = readImages(src)
+        self.temp = readImages(temp)
+        self.actual_match = open(actual_match, 'r').readlines()
+        self.rotation = rotation
+        self.num_of_images = len(src)
+        self.n_templates = len(temp)
+        self.error = ''
+        self.result = ''
 
-    # Print all paths to make sure everything is ok
-    for path in temp:
-        print(path)
+    def evaluate(self, method):
+        if method == 'write-txt':
+            return self._write_experiment()
+        elif method == 'plot':
+            return self._plot_data()
 
-    error_img = []  # Error for each image Sum(error for every template / number of templates)
-    num_of_images = len(src)
+    def _run_evaluation(self):
 
-    counter = 0  # Keeps track of each iterations
-    result = ''
+        self.error_img = []  # Error for each image Sum(error for every template / number of templates)
+        counter = 0  # Keeps track of each iterations
+        result = ''
 
-    for img in src:
-        img_height, img_width, _ = img.shape
-        template_height, template_width, _ = temp[counter].shape
+        for img in self.src:
 
-        processed_img = process_image(img)
+            processed_img = process_image(img)
+            error_temp_img = 0  # Error for one template. How displaced the sensed frame is from the actual one
 
-        print("Source {}x{} , Template {}x{}".format(img_height, img_width, template_height, template_width))
+            for i in range(int(self.n_templates / self.num_of_images)):
+                # Store both actual and sensed x and y
+                actual_x, actual_y, _ = self.actual_match[i].split(',')
+                sensed_x, sensed_y = findTarget(processed_img, process_image(self.temp[counter], rot_deg=self.rotation))
 
-        templates_per_image = n_templates  # This is the num of times the src will be scanned
+                # Error for one template is the added absolute differences between x and y divided the number of pixels
+                error_temp_img += np.abs(int(sensed_x) - int(actual_x)) + np.abs(int(sensed_y) - int(actual_y))
+                counter += 1
 
-        error_temp_img = 0  # Error for one template. How displaced the sensed frame is from the actual one
+            self.error_img.append(error_temp_img / self.n_templates)  # Error for a whole image tested with multiple templates
+            self.result += ("Mean error for image {} : {}px\n".format(int(counter / self.n_templates),
+                                                                 error_temp_img / self.n_templates))
+        # Error for all images
+        self.error = sum(self.error_img) / self.num_of_images
+        self.result += ("There is {} pixel mean error.\n\n".format(self.error))
 
-        for i in range(templates_per_image):
-            # Store both actual and sensed x and y
-            actual_x, actual_y, _ = actual_match[i].split(',')
-            sensed_x, sensed_y = findTarget(processed_img, process_image(temp[counter], rot_deg=rotation))
 
-            # Error for one template is the added absolute differences between x and y divided the number of pixels
-            error_temp_img += np.abs(int(sensed_x) - int(actual_x)) + np.abs(int(sensed_y) - int(actual_y))
+    def _write_experiment(self):
+        # Write the experiment results on a text file
+        self._run_evaluation()
+        file = open("../experiment-results.txt", "a")
+        file.write("-------------- Results using {}deg rotation on source images on dataset --------------\n{}".format(self.rotation, self.result))
+
+
+    def _plot_data(self):
+        self._run_evaluation()
+        results = ['{}'.format(counter + 1) for counter in range(len(self.error_img))], [round(self.error_img[counter], 2) for counter
+                                                                                 in range(len(self.error_img))], self.error
+        counter = 0
+        colors = ['b', 'g', 'r', 'c', 'm', 'y', '#3277a8', '#a87332', '#915e49']
+        for result in results:
+            fig = plt.figure(counter)
+            plt.bar(result[0], result[1], color=colors[counter])
+            for index, value in enumerate(result[1]):
+                plt.text(index, value, str(value))
+
+            plt.xlabel('Images')
+            plt.ylabel('Mean pixel error')
+            plt.axis([0, self.num_of_images, 0, max(self.error_img)+ 100])
+            ax = plt.gca()
+            ax.set_axisbelow(True)
+            plt.gca().yaxis.grid(linestyle="dashed")
+            plt.show()
             counter += 1
-
-        error_img.append(error_temp_img / templates_per_image)  # Error for a whole image tested with multiple templates
-        result += ("Mean error for image {} : {}px\n".format(int(counter / templates_per_image),
-                                                             error_temp_img / templates_per_image))
-
-    # Error for all images
-    error = sum(error_img) / num_of_images
-    result += ("There is {} pixel mean error.\n\n".format(error))
-
-    if res_type == 'text':
-        return result
-    if res_type == 'data':
-        return ['{}'.format(counter + 1) for counter in range(len(error_img))], [round(error_img[counter], 2) for counter
-                                                                                 in range(len(error_img))], error
 
 
 # ------------------------------------------------------------------------------------------------------------------------ #
@@ -228,79 +252,46 @@ def wait_for_ESC():
             cv.destroyAllWindows()
             break
 
+class UI:
+
+    def experiment(self, method):
+        return self._get_method(method)
+
+    def _get_method(self, method):
+        cwd = '../datasets'
+        if method == 'simulation':
+            cwd += '/sources/' + input('Please type in the desired dataset directory\n{}\n'.format(os.listdir(cwd)))
+            sat_dir = cwd + '/' + input('Select satellite image source:\n{}\n'.format(os.listdir(cwd))) + '/'
+            uav_dir = cwd + '/' + input('Select UAV image source:\n{}\n\n'.format(os.listdir(cwd)))
+            head = int(input("Type in the UAV's heading : "))
+            dist = int(input("Type in the distance from the center. This will be applied on both axes :\n"))
+
+            return simulate(readImages(sat_dir), readImages(uav_dir), d_error=dist, heading=head)
+
+        else:
+            src_dir = cwd + '/sources/'
+            tmp_dir = cwd + '/templates/'
+            src_dir += input('Please select a source directory\n{}\n'.format(os.listdir(src_dir)))
+            src_dir += '/' + input('Please specify the source directory\n{}\n'.format(os.listdir(src_dir)))
+            tmp_dir += input('Please select a template directory\n{}\n'.format(os.listdir(tmp_dir)))
+            act_txt_path = tmp_dir + '/' + [file if '.txt' in file else None for file in os.listdir(tmp_dir)][0]
+            tmp_dir += '/' + input('Please specify the template directory\n{}\n'.format(os.listdir(tmp_dir)))
+            rot = input('Enter the template rotation\n')
+
+            evaluator = Evaluator(src_dir, tmp_dir, act_txt_path, rotation=rot)
+
+            return evaluator.evaluate(method)
+
+
 # ------------------------------------------------------------------------------------------------------------------------ #
 
 # -------------------------------------------------- Main ---------------------------------------------------------------- #
 
-# Set image directory
-
-root_directory = '../datasets/sources/source-diverse'
-categories = ['1.source', '2.blurred', '3.cloudy-images', '4.blurred-cloudy']
-
-while True:
-    try:
-        sat_sel = int(input('Select satellite image source:\n1.source 2.blur 3.cloudy-images 4.blurred-cloudy\n\n'))
-        uav_sel = int(input('Select UAV image source:\n1.source 2.blur 3.cloudy-images 4.blurred-cloudy\n\n'))
-        head = int(input("Type in the UAV's heading : "))
-        dist = int(input("Type in the distance from the center. This will be applied on both axes :\n"))
-        break
-    except TypeError:
-        print('Please select an integer between 1-4')
-
-sat_directory = '../datasets/sources/source-diverse/{}'.format(categories[sat_sel - 1])
-uav_directory = '../datasets/sources/source-diverse/{}'.format(categories[uav_sel - 1])
-
-
-simulate(readImages(sat_directory), readImages(uav_directory), d_error=dist, heading=head)
-
-
-# --------------------------------- ADD EVERYTHING BELLOW THIS LINE INTO THE EVALUATE METHOD --------------------------- #
-# categories = ['Source', 'Blurred', 'Cloudy', 'Blurred and Cloudy']
-# results = []
-# counter = 0
-
-# # Evaluate all variations of the source imagery
-# for directory in source_paths:
-#
-#     for rot in range(1, 3):
-#         file_path = [os.path.join(directory, image_path) for image_path in os.listdir(directory)]
-#         file_path.sort()
-#
-#         # Read the images
-#         source_images = []
-#         for image_path in file_path:
-#             source_images.append(cv.imread(image_path))
-#
-#         results.append(evaluate(source_images, templates, actual_match_position, 16, 'data', rotation=rot, title='Diverse Dataset {} with {} degree(s) rotation'.format(categories[counter], rot)))
-#     counter += 1
-#     source_images.clear()
-
-# Evaluate the matching method. The method is hardcoded into the evaluation. This should be changed
-# result_text = evaluate(source_images, templates, actual_match_position, 20, rotation=1)
-
-# Write the experiment results on a text file
-# file = open("../experiment-results.txt", "a")
-# file.write("-------------- Results using 1deg rotation on source images on less-features dataset --------------\n{}".format(result_text))
-
-# Draw plots
-
-# print(results)
-#
-# colors = ['b', 'g', 'r', 'c', 'm', 'y', '#3277a8', '#a87332', '#915e49']
-# counter = 0
-# for result in results:
-#     fig = plt.figure(counter)
-#     plt.bar(result[0], result[1], color=colors[counter])
-#     for index, value in enumerate(result[1]):
-#         plt.text(index, value, str(value))
-#
-#     plt.xlabel('Images')
-#     plt.ylabel('Mean pixel error')
-#     plt.axis([0, 8, 0, 700])
-#     ax = plt.gca()
-#     ax.set_axisbelow(True)
-#     plt.gca().yaxis.grid(linestyle="dashed")
-#     plt.show()
-#     counter += 1
+ui = UI()
+ui.experiment('write-txt')
 
 # ---------------------------------------------------------------------------------------------------------------------- #
+
+
+
+
