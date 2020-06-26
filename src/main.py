@@ -173,10 +173,8 @@ def simulate(sat_images, sim_uav_images, d_error=100, dx_bias='East', dy_bias='S
                        capt_top_left[0]:capt_top_left[0] + capture_dim]
 
         cv.imshow('Captured image', captured_img)
-        while True:
-            if cv.waitKey(1) == 27:
-                cv.destroyAllWindows()
-                break
+        wait_for_ESC()
+
         print('INS : {} degrees insertion angle\nRotating image accordingly...\nPress ESC to continue'.format(heading))
         captured_img = imutils.rotate(captured_img, -heading)
 
@@ -185,10 +183,7 @@ def simulate(sat_images, sim_uav_images, d_error=100, dx_bias='East', dy_bias='S
                        int(captured_img.shape[0] / 4):int(captured_img.shape[0] / 4) + int(captured_img.shape[0] / 2),
                        int(captured_img.shape[1] / 4):int(captured_img.shape[1] / 4) + int(captured_img.shape[1] / 2)]
         cv.imshow('INS corrected captured image', captured_img)
-        while True:
-            if cv.waitKey(1) == 27:
-                cv.destroyAllWindows()
-                break
+        wait_for_ESC()
 
         # Find where the captured image is located relative to the satellite image
         captured_image_location = findTarget(sat_images[index], captured_img)  # Top-left location of the template image
@@ -225,6 +220,16 @@ def readImages(directory):
 
 # ------------------------------------------------------------------------------------------------------------------------ #
 
+# ----------------------------------------------- Misc Methods ----------------------------------------------------------- #
+
+def wait_for_ESC():
+    while True:
+        if cv.waitKey(1) == 27:
+            cv.destroyAllWindows()
+            break
+
+# ------------------------------------------------------------------------------------------------------------------------ #
+
 # -------------------------------------------------- Main ---------------------------------------------------------------- #
 
 # Set image directory
@@ -245,12 +250,8 @@ while True:
 sat_directory = '../datasets/sources/source-diverse/{}'.format(categories[sat_sel - 1])
 uav_directory = '../datasets/sources/source-diverse/{}'.format(categories[uav_sel - 1])
 
-cv.imshow('Image', process_image(readImages(sat_directory)[0]))
-while True:
-    if cv.waitKey(1) == 27:
-        cv.destroyAllWindows()
-        exit()
-# simulate(readImages(sat_directory), readImages(uav_directory), d_error=dist, heading=head)
+
+simulate(readImages(sat_directory), readImages(uav_directory), d_error=dist, heading=head)
 
 
 # --------------------------------- ADD EVERYTHING BELLOW THIS LINE INTO THE EVALUATE METHOD --------------------------- #
