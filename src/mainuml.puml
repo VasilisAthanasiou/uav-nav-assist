@@ -1,0 +1,37 @@
+@startuml
+
+class UI{
+-method : String
+--
++experiment()
+-get_method()
+}
+
+Simulator *-- UI
+Evaluator *-- UI
+class Evaluator{
++src : List[String]
++temp : List[String]
++actual_match : List[String]
++rotation : Int
++image_error : Float
++error : Float
+--
++evaluate()
+-run_evaluation()
+-write_experiment()
+-plot_data()
+}
+
+class Simulator{
++sat_images : List[Mat]
++sim_uav_images : List[Mat]
++params : Tuple(Int, Str, Str, Int, Int)
++center_displacement : Tuple(Int, Int)
+--
+-set_uav_params()
++simulate()
+}
+
+
+@enduml

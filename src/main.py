@@ -3,6 +3,8 @@ import numpy as np
 import os
 import imutils
 from matplotlib import pyplot as plt
+import matplotlib
+matplotlib.use('TkAgg')
 
 
 # --------------------------------------------- Image Processing --------------------------------------------------------- #
@@ -69,10 +71,8 @@ class Evaluator:
         self.temp = readImages(temp)
         self.actual_match = open(actual_match, 'r').readlines()
         self.rotation = rotation
-        self.num_of_images = len(src)
-        self.n_templates = len(temp)
-        self.error = ''
-        self.result = ''
+        self.error = 0.0
+        self.result_txt = ''
 
     def evaluate(self, method):
         if method == 'write-txt':
@@ -82,16 +82,16 @@ class Evaluator:
 
     def _run_evaluation(self):
 
-        self.error_img = []  # Error for each image Sum(error for every template / number of templates)
+        self.img_error = []  # Error for each image Sum(error for every template / number of templates)
+        n_templates = len(self.temp)
         counter = 0  # Keeps track of each iterations
-        result = ''
 
         for img in self.src:
 
             processed_img = process_image(img)
             error_temp_img = 0  # Error for one template. How displaced the sensed frame is from the actual one
 
-            for i in range(int(self.n_templates / self.num_of_images)):
+            for i in range(int(n_templates / len(self.src))):
                 # Store both actual and sensed x and y
                 actual_x, actual_y, _ = self.actual_match[i].split(',')
                 sensed_x, sensed_y = findTarget(processed_img, process_image(self.temp[counter], rot_deg=self.rotation))
@@ -100,129 +100,133 @@ class Evaluator:
                 error_temp_img += np.abs(int(sensed_x) - int(actual_x)) + np.abs(int(sensed_y) - int(actual_y))
                 counter += 1
 
-            self.error_img.append(error_temp_img / self.n_templates)  # Error for a whole image tested with multiple templates
-            self.result += ("Mean error for image {} : {}px\n".format(int(counter / self.n_templates),
-                                                                 error_temp_img / self.n_templates))
+            self.img_error.append(error_temp_img / n_templates)  # Error for a whole image tested with multiple templates
+            self.result_txt += ("Mean error for image {} : {}px\n".format(int(counter / n_templates),
+                                                                 error_temp_img / n_templates))
         # Error for all images
-        self.error = sum(self.error_img) / self.num_of_images
-        self.result += ("There is {} pixel mean error.\n\n".format(self.error))
+        self.error = sum(self.img_error) / len(self.src)
+        self.result_txt += ("There is {} pixel mean error.\n\n".format(self.error))
 
 
     def _write_experiment(self):
         # Write the experiment results on a text file
         self._run_evaluation()
         file = open("../experiment-results.txt", "a")
-        file.write("-------------- Results using {}deg rotation on source images on dataset --------------\n{}".format(self.rotation, self.result))
+        file.write("-------------- Results using {}deg rotation on source images on dataset --------------\n{}".format(self.rotation, self.result_txt))
 
 
     def _plot_data(self):
+
         self._run_evaluation()
-        results = ['{}'.format(counter + 1) for counter in range(len(self.error_img))], [round(self.error_img[counter], 2) for counter
-                                                                                 in range(len(self.error_img))], self.error
-        counter = 0
+        results = [round(self.img_error[counter], 2) for counter in range(len(self.img_error))]
+
         colors = ['b', 'g', 'r', 'c', 'm', 'y', '#3277a8', '#a87332', '#915e49']
-        for result in results:
-            fig = plt.figure(counter)
-            plt.bar(result[0], result[1], color=colors[counter])
-            for index, value in enumerate(result[1]):
-                plt.text(index, value, str(value))
 
-            plt.xlabel('Images')
-            plt.ylabel('Mean pixel error')
-            plt.axis([0, self.num_of_images, 0, max(self.error_img)+ 100])
-            ax = plt.gca()
-            ax.set_axisbelow(True)
-            plt.gca().yaxis.grid(linestyle="dashed")
-            plt.show()
-            counter += 1
-
-
+        plt.xlabel('Images')
+        plt.ylabel('Mean pixel error')
+        plt.axis([0, len(self.src), 0, 700])
+        ax = plt.gca()
+        ax.set_axisbelow(True)
+        plt.gca().yaxis.grid(linestyle="dashed")
+        for index, value in enumerate(results):
+            plt.text(index, value, str(value))  # Problem with this stupid thing
+        plt.bar(results[0], results[1], color=colors[np.random.randint(0, 8)])
+        plt.show()
 # ------------------------------------------------------------------------------------------------------------------------ #
 
 # ----------------------------------------------- Simulation ------------------------------------------------------------- #
-def simulate(sat_images, sim_uav_images, d_error=100, dx_bias='East', dy_bias='South', heading=45, capture_dim=200):
-    """Runs a flight simulation.
+class Simulator:
 
-    Args:
-        sat_images: Set of satellite images, that represent images stored on the UAV
-        sim_uav_images : Set of images that
-        d_error: Displacement error. The error caused by the INS inaccuracy
-        dx_bias: Direction of the horizontal error. Is always fixed for a give type of inertial system
-        dy_bias: Direction of the vertical error. Is always fixed for a given type of inertial system
-        heading: Angle from which the UAV will be inserted into the satellite image.
-        capture_dim: Dimension of image captured by the UAV
-    Returns:
+    def __init__(self, sat_images=None, sim_uav_images=None):
+        self.sat_images = sat_images
+        self.sim_uav_images = sim_uav_images
+        self.params = 100, 'East', 'South', 45, 200
+        self.center_displacement = (0, 0)
 
-    """
+    def _set_uav_params(self, use_defaults):
+        if not use_defaults:
+            dist_center = input('Enter distance from center\n')
+            dx_bias = input('Enter direction of horizontal displacement: West or East\n')
+            dy_bias = input('Enter direction of vertical displacement: North or South\n')
+            heading = int(input('Enter heading angle relative to true North\n'))
+            capture_dim = int(input('Enter the dimension of the captured images. Default is 200\n'))
+            self.params = int(dist_center), dx_bias, dy_bias, int(heading), int(capture_dim)
+    
+    def simulate(self, sat_images, sim_uav_images, use_defaults):
+        # Initialize variables
+        self._set_uav_params(use_defaults)
+        dist_center, dx_bias, dy_bias, heading, capture_dim = self.params
 
-    # Initialize variables
-    dx = {'West': -d_error, 'East': d_error}
-    dy = {'South': d_error, 'North': -d_error}
-    dx = dx[dx_bias]
-    dy = dy[dy_bias]
+        dx = {'West': -dist_center, 'East': dist_center}
+        dy = {'South': dist_center, 'North': -dist_center}
+        dx = dx[dx_bias]
+        dy = dy[dy_bias]
 
-    # Simulation loop
-    for index in range(len(sat_images)):
+        self.sat_images = sat_images
+        self.sim_uav_images = sim_uav_images
 
-        # Set center of satellite image
-        sat_image_center = (int(sat_images[index].shape[0] / 2), int(sat_images[index].shape[1] / 2))
+        # Simulation loop
+        for index in range(len(self.sat_images)):
 
-        # Simulate heading errors
-        inertial_error = np.random.uniform(0, 2)
+            # Set center of satellite image
+            sat_image_center = (int(self.sat_images[index].shape[0] / 2), int(self.sat_images[index].shape[1] / 2))
 
-        # Rotate the image clockwise
-        uav_processed_image = imutils.rotate(sim_uav_images[index], heading + inertial_error)
-        uav_prc_center = (int(uav_processed_image.shape[0] / 2), int(uav_processed_image.shape[1] / 2))
-        print('The INS made a {} degree error\nPress ESC to continue'.format(inertial_error))
+            # Simulate heading errors
+            inertial_error = np.random.uniform(0, 2)
 
-        # Define center of captured image inside the rotated uav image
-        capt_img_rotated_center = (uav_prc_center[0] + dx, uav_prc_center[1] + dy)
+            # Rotate the image clockwise
+            uav_processed_image = imutils.rotate(sim_uav_images[index], heading + inertial_error)
+            uav_prc_center = (int(uav_processed_image.shape[0] / 2), int(uav_processed_image.shape[1] / 2))
+            print('The INS made a {} degree error\nPress ESC to continue'.format(inertial_error))
 
-        # Calculate the center of the captured image relative to the satellite source (uav_processed_image before rotation)
-        x = capt_img_rotated_center[0]
-        y = capt_img_rotated_center[1]
-        p = uav_prc_center[0]
-        q = uav_prc_center[1]
-        theta = np.deg2rad(heading)
+            # Define center of captured image inside the rotated uav image
+            capt_img_rotated_center = (uav_prc_center[0] + dx, uav_prc_center[1] + dy)
 
-        # Finding coordinates of capture center by
-        actual_capture_coord = (x - p) * np.cos(-theta) + (y - q) * np.sin(-theta) + p, -(x - p) * np.sin(-theta) + (
-                y - q) * np.cos(-theta) + q
+            # Calculate the center of the captured image relative to the satellite source (uav_processed_image before rotation)
+            x = capt_img_rotated_center[0]
+            y = capt_img_rotated_center[1]
+            p = uav_prc_center[0]
+            q = uav_prc_center[1]
+            theta = np.deg2rad(heading)
 
-        # "Capturing" the UAV image by cropping the uav_processed_image
-        capt_top_left = (capt_img_rotated_center[0] - int(capture_dim / 2),  # Top left pixel location of captured image
-                         capt_img_rotated_center[1] - int(capture_dim / 2))
+            # Finding coordinates of capture center by
+            actual_capture_coord = (x - p) * np.cos(-theta) + (y - q) * np.sin(-theta) + p, -(x - p) * np.sin(-theta) + (
+                    y - q) * np.cos(-theta) + q
 
-        captured_img = uav_processed_image[capt_top_left[1]:capt_top_left[1] + capture_dim,
-                       capt_top_left[0]:capt_top_left[0] + capture_dim]
+            # "Capturing" the UAV image by cropping the uav_processed_image
+            capt_top_left = (capt_img_rotated_center[0] - int(capture_dim / 2),  # Top left pixel location of captured image
+                             capt_img_rotated_center[1] - int(capture_dim / 2))
 
-        cv.imshow('Captured image', captured_img)
-        wait_for_ESC()
+            captured_img = uav_processed_image[capt_top_left[1]:capt_top_left[1] + capture_dim,
+                           capt_top_left[0]:capt_top_left[0] + capture_dim]
 
-        print('INS : {} degrees insertion angle\nRotating image accordingly...\nPress ESC to continue'.format(heading))
-        captured_img = imutils.rotate(captured_img, -heading)
+            cv.imshow('Captured image', captured_img)
+            wait_for_esc()
 
-        # Crop the image to get rid of black areas caused by rotation
-        captured_img = captured_img[
-                       int(captured_img.shape[0] / 4):int(captured_img.shape[0] / 4) + int(captured_img.shape[0] / 2),
-                       int(captured_img.shape[1] / 4):int(captured_img.shape[1] / 4) + int(captured_img.shape[1] / 2)]
-        cv.imshow('INS corrected captured image', captured_img)
-        wait_for_ESC()
+            print('INS : {} degrees insertion angle\nRotating image accordingly...\nPress ESC to continue'.format(heading))
+            captured_img = imutils.rotate(captured_img, -heading)
 
-        # Find where the captured image is located relative to the satellite image
-        captured_image_location = findTarget(sat_images[index], captured_img)  # Top-left location of the template image
+            # Crop the image to get rid of black areas caused by rotation
+            captured_img = captured_img[
+                           int(captured_img.shape[0] / 4):int(captured_img.shape[0] / 4) + int(captured_img.shape[0] / 2),
+                           int(captured_img.shape[1] / 4):int(captured_img.shape[1] / 4) + int(captured_img.shape[1] / 2)]
+            cv.imshow('INS corrected captured image', captured_img)
+            wait_for_esc()
 
-        captured_img_center = (captured_image_location[0] + int(captured_img.shape[0] / 2),
-                               captured_image_location[1] + int(captured_img.shape[1] / 2))
+            # Find where the captured image is located relative to the satellite image
+            captured_image_location = findTarget(self.sat_images[index], captured_img)  # Top-left location of the template image
 
-        # Send the course correction signal
-        course_displacement = captured_img_center[0] - sat_image_center[0], sat_image_center[1] - captured_img_center[1]
+            captured_img_center = (captured_image_location[0] + int(captured_img.shape[0] / 2),
+                                   captured_image_location[1] + int(captured_img.shape[1] / 2))
 
-        print('The UAV is off center {} meters horizontally and {} meters vertically\n'
-              'And the error is {:.2f} meters horizontally and {:.2f} meters vertically\n\n'.format(
-            course_displacement[0], course_displacement[1],
-            np.abs(captured_img_center[0] - actual_capture_coord[0]),
-            np.abs(captured_img_center[1] - actual_capture_coord[1])))
+            # Send the course correction signal
+            self.center_displacement = captured_img_center[0] - sat_image_center[0], sat_image_center[1] - captured_img_center[1]
+
+            print('The UAV is off center {} meters horizontally and {} meters vertically\n'
+                  'And the error is {:.2f} meters horizontally and {:.2f} meters vertically\n\n'.format(
+                self.center_displacement[0], self.center_displacement[1],
+                np.abs(captured_img_center[0] - actual_capture_coord[0]),
+                np.abs(captured_img_center[1] - actual_capture_coord[1])))
 
 
 # ------------------------------------------------------------------------------------------------------------------------ #
@@ -231,6 +235,14 @@ def simulate(sat_images, sim_uav_images, d_error=100, dx_bias='East', dy_bias='S
 
 # Reads images and converts them to grayscale
 def readImages(directory):
+    """Reads all images from selected path using OpenCV's imread and converts them to grayscale.
+
+    Args:
+        directory: Images directory
+
+    Returns:
+
+    """
     # Append all the paths into lists
     img_paths = [os.path.join(directory, image_path) for image_path in os.listdir(directory)]
     img_paths.sort()
@@ -246,29 +258,48 @@ def readImages(directory):
 
 # ----------------------------------------------- Misc Methods ----------------------------------------------------------- #
 
-def wait_for_ESC():
+def wait_for_esc():
     while True:
         if cv.waitKey(1) == 27:
             cv.destroyAllWindows()
             break
 
+def yes_no(arg):
+    args = (['y', 'Y', 'yes', 'Yes', 'YES'], ['n', 'N', 'no', 'No', 'NO'])
+    while True:
+        if arg in args[0]:
+            return True
+        elif arg in args[1]:
+            return False
+        else:
+            print("Please give a correct answer: ['y', 'Y', 'yes', 'Yes', 'YES'] or ['n', 'N', 'no', 'No', 'NO']")
+
 class UI:
 
+    def __init__(self, method=''):
+        self._method = method
+
     def experiment(self, method):
-        return self._get_method(method)
+        """
+Simulator
+        Args:
+            method: Selects the method to run. Can be = 'simulation', 'plot', 'write-text'
+        """
+        self._method = method
+        return self._get_method(self._method)
 
     def _get_method(self, method):
         cwd = '../datasets'
         if method == 'simulation':
-            cwd += '/sources/' + input('Please type in the desired dataset directory\n{}\n'.format(os.listdir(cwd)))
+            sim = Simulator()
+            cwd += '/sources/' + input('Please type in the desired dataset directory\n{}\n'.format(os.listdir(cwd + '/sources/')))
             sat_dir = cwd + '/' + input('Select satellite image source:\n{}\n'.format(os.listdir(cwd))) + '/'
             uav_dir = cwd + '/' + input('Select UAV image source:\n{}\n\n'.format(os.listdir(cwd)))
-            head = int(input("Type in the UAV's heading : "))
-            dist = int(input("Type in the distance from the center. This will be applied on both axes :\n"))
+            use_defaults = yes_no(input('Do you want to use the default simulation values? : '))
 
-            return simulate(readImages(sat_dir), readImages(uav_dir), d_error=dist, heading=head)
+            return sim.simulate(readImages(sat_dir), readImages(uav_dir), use_defaults)
 
-        else:
+        elif (method == 'plot') or (method == 'write-txt'):
             src_dir = cwd + '/sources/'
             tmp_dir = cwd + '/templates/'
             src_dir += input('Please select a source directory\n{}\n'.format(os.listdir(src_dir)))
@@ -276,7 +307,7 @@ class UI:
             tmp_dir += input('Please select a template directory\n{}\n'.format(os.listdir(tmp_dir)))
             act_txt_path = tmp_dir + '/' + [file if '.txt' in file else None for file in os.listdir(tmp_dir)][0]
             tmp_dir += '/' + input('Please specify the template directory\n{}\n'.format(os.listdir(tmp_dir)))
-            rot = input('Enter the template rotation\n')
+            rot = int(input('Enter the template rotation\n'))
 
             evaluator = Evaluator(src_dir, tmp_dir, act_txt_path, rotation=rot)
 
@@ -288,9 +319,10 @@ class UI:
 # -------------------------------------------------- Main ---------------------------------------------------------------- #
 
 ui = UI()
-ui.experiment('write-txt')
+ui.experiment('plot')
 
-# ---------------------------------------------------------------------------------------------------------------------- #
+
+# ------------------------------------------------------------------------------------------------------------------------ #
 
 
 
