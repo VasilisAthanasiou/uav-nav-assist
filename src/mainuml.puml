@@ -1,37 +1,65 @@
 @startuml
 
 class UI{
--method : String
---
-+experiment()
--get_method()
+    +experiment() : Void
+    -get_method() : Method
+    -_use_simulation() : Simulator.simulate
+    -_use_evaluation() : Evaluator.evaluate
+    --
+    -method : String
+    +cwd : String
+    +simulator : Simulator
+    +evaluator : Evaluator
+
+}
+note left: Prompts user to select the dataset and \nthe arguments for experimentation.
+class Evaluator{
+    +evaluate() : Method
+    -run_evaluation() : Void
+    -write_experiment() : Void
+    -plot_data() : Void
+    --
+    +src : List[String]
+    +temp : List[String]
+    +actual_match : List[String]
+    +rotation : Int
+    +image_error : Float
+    +error : Float
+    +result_txt : String
 }
 
-Simulator *-- UI
-Evaluator *-- UI
-class Evaluator{
-+src : List[String]
-+temp : List[String]
-+actual_match : List[String]
-+rotation : Int
-+image_error : Float
-+error : Float
---
-+evaluate()
--run_evaluation()
--write_experiment()
--plot_data()
-}
+note left: Evaluates matchTemplate\nand either plots or writes\nthe result in a text file
 
 class Simulator{
-+sat_images : List[Mat]
-+sim_uav_images : List[Mat]
-+params : Tuple(Int, Str, Str, Int, Int)
-+center_displacement : Tuple(Int, Int)
---
--set_uav_params()
-+simulate()
+    -set_uav_params() : Void
+    +simulate() : Void
+    --
+    +sat_images : List[Mat]
+    +sim_uav_images : List[Mat]
+    +params : Tuple(Int, Str, Str, Int, Int)
+    +center_displacement : Tuple(Int, Int)
 }
 
+note right of Simulator: Performs a flight simulation and\ncalculates UAV displacement from\nthe center of the satellite image.
+
+class ImageReader{
+    +readImages() : List[Mat]
+    --
+    +directory : String
+}
+
+class Processor{
+    +process_image() : Mat
+    --
+    +processed_img : Mat
+}
+
+
+Simulator "1" <--. UI
+Evaluator "1" <--. UI
+ImageReader "1" <---. Simulator
+ImageReader "1" <---. Evaluator
+Processor "1"  <--. Evaluator
+Processor "1" <--. Simulator
 
 @enduml
