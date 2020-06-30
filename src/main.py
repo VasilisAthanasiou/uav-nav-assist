@@ -235,7 +235,7 @@ class Simulator:
             q = uav_prc_center[1]
             theta = np.deg2rad(heading)
 
-            # Finding coordinates of capture center by
+            # Finding coordinates of capture center
             actual_capture_coord = (x - p) * np.cos(-theta) + (y - q) * np.sin(-theta) + p, -(x - p) * np.sin(-theta) + (
                     y - q) * np.cos(-theta) + q
 
@@ -322,7 +322,7 @@ class UI:
         self._method = method
         self.simulator = None
         self.evaluator = None
-        self.cwd = '../datasets/sources'
+        self.cwd = '../datasets'
 
     def experiment(self, method):
         """
@@ -331,14 +331,15 @@ class UI:
             method: Selects the method to run. Can be = 'simulation', 'plot', 'write text'
         """
         self._method = method
-        return self._get_method
+        return self._get_method()
 
 
     def _get_method(self):
+
         if self._method == 'simulation':
-            return self._use_simulation
+            return self._use_simulation()
         elif (self._method == 'plot') or (self._method == 'write text'):
-            return self._use_evaluation
+            return self._use_evaluation()
 
 
     def _use_simulation(self):
