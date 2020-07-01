@@ -55,7 +55,7 @@ class Processor{
 }
 
 
-Simulator "1" <--. UI
+Simulator "1" *--. UI
 Evaluator "1" <--. UI
 ImageReader "1" <---. Simulator
 ImageReader "1" <---. Evaluator

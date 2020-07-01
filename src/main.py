@@ -24,6 +24,7 @@ def yes_no(arg):
         else:
             print("Please give a correct answer: ['y', 'Y', 'yes', 'Yes', 'YES'] or ['n', 'N', 'no', 'No', 'NO']")
 
+
 def draw_image(img, x, y, radius=10, color=(0, 0, 255)):
     try:
         img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
@@ -34,8 +35,10 @@ def draw_image(img, x, y, radius=10, color=(0, 0, 255)):
     cv.circle(img, (x, y), radius, color, -1)
     return img
 
+
 def snap_image(img, top_x, top_y, dim):
-    return img[top_y:top_y + dim, top_x:top_x + dim]
+    return img[top_x:top_x + dim, top_y:top_y + dim]
+
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
@@ -59,6 +62,7 @@ class Processor:
 
     def __init__(self):
         self.processed_img = None
+
 
     def process_image(self, src_img, rot_deg=0, args=None):
         """Applies image processing techniques on an image.
@@ -123,11 +127,13 @@ class Evaluator:
         self.error = 0.0
         self.result_txt = ''
 
+
     def evaluate(self, method):
         if method == 'write text':
             return self._write_experiment()
         elif method == 'plot':
             return self._plot_data()
+
 
     def _run_evaluation(self):
         self.img_error = []  # Error for each image Sum(error for every template / number of templates)
@@ -157,6 +163,7 @@ class Evaluator:
         # Error for all images
         self.error = sum(self.img_error) / len(self.src)
         self.result_txt += ("There is {} pixel mean error.\n\n".format(self.error))
+
 
     def _write_experiment(self):
         # Write the experiment results on a text file
@@ -288,7 +295,6 @@ class Simulator:
         # Initialize variables
         self._set_uav_params(use_defaults)
         dist_center, dx_bias, dy_bias, heading, capture_dim = self.params
-        prc = Processor()
 
         # Read images
         rd = ImageReader()
@@ -311,8 +317,10 @@ class Simulator:
         # Simulation loop
         for index in range(len(self.sat_images)):
             # Run a simulation with
-            x_error, y_error = self._verbose_sim(self.sat_images[index], self.sim_uav_images[index], inertial_error)
-
+            try:
+                x_error, y_error = self._verbose_sim(self.sat_images[index], self.sim_uav_images[index], inertial_error)
+            except cv.error as e:
+                print('UAV flew outside the expected region\n\n{}'.format(e))
             # Accumulate the central displacement error
             self.dx += x_error
             self.dy += y_error
@@ -416,10 +424,10 @@ class UI:
 
 # ----------------------------------------------------- Main ------------------------------------------------------------------- #
 
-ui = UI()
-ui.experiment('simulation')  # Either 'simulation', 'plot' or 'write text'
+# ui = UI()
+# ui.experiment('simulation')  # Either 'simulation', 'plot' or 'write text'
 
-# sim = Simulator()
-# sim.simulate('../datasets/sources/source-diverse/3.cloudy-images', '../datasets/sources/source-diverse/1.source', 'y', 5)
+sim = Simulator()
+sim.simulate('../datasets/sources/source-diverse/1.source', '../datasets/sources/source-diverse/1.source', 'y', 0)
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
