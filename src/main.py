@@ -24,6 +24,16 @@ def yes_no(arg):
         else:
             print("Please give a correct answer: ['y', 'Y', 'yes', 'Yes', 'YES'] or ['n', 'N', 'no', 'No', 'NO']")
 
+def draw_image(img, x, y, radius=10, color=(0, 0, 255)):
+    try:
+        img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
+    except cv.error:
+        cv.circle(img, (x, y), radius, color, -1)
+        return img
+
+    cv.circle(img, (x, y), radius, color, -1)
+    return img
+
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
@@ -193,7 +203,8 @@ class Simulator:
             capture_dim = int(input('Enter the dimension of the captured images. Default is 200\n'))
             self.params = int(dist_center), dx_bias, dy_bias, int(heading), int(capture_dim)
 
-    def simulate(self, sat_dir, sim_uav_dir, use_defaults):
+
+    def simulate(self, sat_dir, sim_uav_dir, use_defaults, inertial_error=np.random.uniform(0, 2)):
         # Initialize variables
         self._set_uav_params(use_defaults)
         dist_center, dx_bias, dy_bias, heading, capture_dim = self.params
@@ -204,60 +215,49 @@ class Simulator:
         sat_images = rd.readImages(sat_dir)
         sim_uav_images = rd.readImages(sim_uav_dir)
 
+        # Central displacement error
         dx = {'West': -dist_center, 'East': dist_center}
         dy = {'South': dist_center, 'North': -dist_center}
         dx = dx[dx_bias]
         dy = dy[dy_bias]
 
+        # Initialize the images
         self.sat_images = sat_images
         self.sim_uav_images = sim_uav_images
 
         # Simulation loop
         for index in range(len(self.sat_images)):
-            # Set center of satellite image
+            # Set center of satellite images
             sat_image_center = (int(self.sat_images[index].shape[0] / 2), int(self.sat_images[index].shape[1] / 2))
 
-            # Simulate heading errors
-            inertial_error = np.random.uniform(0, 2)
-
-            # Rotate the image clockwise
-            uav_processed_image = prc.process_image(sim_uav_images[index], rot_deg=heading + inertial_error, args=['rotate'])
-            uav_prc_center = (int(uav_processed_image.shape[0] / 2), int(uav_processed_image.shape[1] / 2))
-            print('The INS made a {} degree error\nPress ESC to continue'.format(inertial_error))
-
-            # Define center of captured image inside the rotated uav image
-            capt_img_rotated_center = (uav_prc_center[0] + dx, uav_prc_center[1] + dy)
-
-            # Calculate the center of the captured image relative to the satellite source (uav_processed_image before rotation)
-            x = capt_img_rotated_center[0]
-            y = capt_img_rotated_center[1]
-            p = uav_prc_center[0]
-            q = uav_prc_center[1]
-            theta = np.deg2rad(heading)
-
-            # Finding coordinates of capture center
-            actual_capture_coord = (x - p) * np.cos(-theta) + (y - q) * np.sin(-theta) + p, -(x - p) * np.sin(-theta) + (
-                    y - q) * np.cos(-theta) + q
+            # Coordinates where the UAV will capture an image
+            actual_capture_coord = sat_image_center[0] + dx, sat_image_center[1] + dy
+            print('The UAV is off course {} {} and {} {}'.format(dx, dx_bias, dy, dy_bias))
 
             # "Capturing" the UAV image by cropping the uav_processed_image
-            capt_top_left = (capt_img_rotated_center[0] - int(capture_dim / 2),  # Top left pixel location of captured image
-                             capt_img_rotated_center[1] - int(capture_dim / 2))
-
-            captured_img = uav_processed_image[capt_top_left[1]:capt_top_left[1] + capture_dim,
+            capt_top_left = (actual_capture_coord[0] - int(capture_dim / 2),  # Top left pixel location of captured image
+                             actual_capture_coord[1] - int(capture_dim / 2))
+            # Cropping the UAV image
+            captured_img = sim_uav_images[index][capt_top_left[1]:capt_top_left[1] + capture_dim,
                            capt_top_left[0]:capt_top_left[0] + capture_dim]
 
+            marked_loc_img = draw_image(sat_images[index], actual_capture_coord[0], actual_capture_coord[1], color=(255, 0, 0))
+            cv.imshow('Actual UAV location', marked_loc_img)
             cv.imshow('Captured image', captured_img)
             wait_for_esc()
 
+            # Rotate the image clockwise to simulate the insertion angle plus the INS error
+            captured_img = prc.process_image(captured_img, rot_deg=heading + inertial_error, args=['rotate'])
+            print('The INS made a {} degree error\nPress ESC to continue'.format(inertial_error))
+
+            # Rotate the image to match its orientation into what the UAV thinks is true north. Doesn't include the INS error
             print('INS : {} degrees insertion angle\nRotating image accordingly...\nPress ESC to continue'.format(heading))
-            captured_img = imutils.rotate(captured_img, -heading)
+            captured_img = prc.process_image(captured_img, rot_deg=-heading, args=['rotate'])
 
             # Crop the image to get rid of black areas caused by rotation
             captured_img = captured_img[
                            int(captured_img.shape[0] / 4):int(captured_img.shape[0] / 4) + int(captured_img.shape[0] / 2),
                            int(captured_img.shape[1] / 4):int(captured_img.shape[1] / 4) + int(captured_img.shape[1] / 2)]
-            cv.imshow('INS corrected captured image', captured_img)
-            wait_for_esc()
 
             # Find where the captured image is located relative to the satellite image
             captured_image_location = findTarget(self.sat_images[index], captured_img)  # Top-left location of the template image
@@ -265,14 +265,20 @@ class Simulator:
             captured_img_center = (captured_image_location[0] + int(captured_img.shape[0] / 2),
                                    captured_image_location[1] + int(captured_img.shape[1] / 2))
 
-            # Send the course correction signal
-            self.center_displacement = captured_img_center[0] - sat_image_center[0], sat_image_center[1] - captured_img_center[1]
+            marked_loc_img = draw_image(marked_loc_img, captured_img_center[0], captured_img_center[1])
+            cv.imshow('Actual location (Blue) vs Calculated location (Red)', marked_loc_img)
+            wait_for_esc()
 
+            # Course correction data
+            x_error, y_error = captured_img_center[0] - actual_capture_coord[0], captured_img_center[1] - actual_capture_coord[1]
+            self.center_displacement = captured_img_center[0] - sat_image_center[0], sat_image_center[1] - captured_img_center[1]
             print('The UAV is off center {} meters horizontally and {} meters vertically\n'
                   'And the error is {:.2f} meters horizontally and {:.2f} meters vertically\n\n'.format(
-                self.center_displacement[0], self.center_displacement[1],
-                np.abs(captured_img_center[0] - actual_capture_coord[0]),
-                np.abs(captured_img_center[1] - actual_capture_coord[1])))
+                self.center_displacement[0], self.center_displacement[1], x_error, y_error))
+
+            # Accumulate the central displacement error
+            dx += x_error
+            dy += y_error
 
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
@@ -373,7 +379,10 @@ class UI:
 
 # ----------------------------------------------------- Main ------------------------------------------------------------------- #
 
-ui = UI()
-ui.experiment('simulation')  # Either 'simulation', 'plot' or 'write text'
+# ui = UI()
+# ui.experiment('simulation')  # Either 'simulation', 'plot' or 'write text'
+
+sim = Simulator()
+sim.simulate('../datasets/sources/source-diverse/3.cloudy-images', '../datasets/sources/source-diverse/1.source', 'y', 5)
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
