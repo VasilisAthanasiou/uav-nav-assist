@@ -423,11 +423,11 @@ class UI:
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
 # ----------------------------------------------------- Main ------------------------------------------------------------------- #
-
+print('hello world')
 # ui = UI()
 # ui.experiment('simulation')  # Either 'simulation', 'plot' or 'write text'
 
 sim = Simulator()
-sim.simulate('../datasets/sources/source-diverse/1.source', '../datasets/sources/source-diverse/1.source', 'y', 0)
+sim.simulate('../datasets/sources/source-diverse/1.source', '../datasets/sources/source-diverse/1.source', 'y', 5)
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
