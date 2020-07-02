@@ -43,3 +43,4 @@ Here is a list of algorithms that could tackle this problem.
 
 - [YOLO : You Only Look Once](https://pjreddie.com/darknet/yolo/)
 - [SIFT : Scale Invariant Feature Transform](https://opencv-python-tutroals.readthedocs.io/en/latest/py_tutorials/py_feature2d/py_sift_intro/py_sift_intro.html)
+- [A Gentle Introduction to Object Recognition With Deep Learning](https://machinelearningmastery.com/object-recognition-with-deep-learning/)
