@@ -32,6 +32,7 @@ note left: Evaluates matchTemplate\nand either plots or writes\nthe result in a 
 
 class Simulator{
     -set_uav_params() : Void
+    -verbose_simulation() : Tuple(Int, Int)
     +simulate() : Void
     --
     +sat_images : List[Mat]
@@ -55,8 +56,8 @@ class Processor{
 }
 
 
-Simulator "1" *--. UI
-Evaluator "1" <--. UI
+Simulator "1" *--- UI
+Evaluator "1" *--- UI
 ImageReader "1" <---. Simulator
 ImageReader "1" <---. Evaluator
 Processor "1"  <--. Evaluator

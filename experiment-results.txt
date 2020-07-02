@@ -1,33 +1,13 @@
--------------- Results using 2deg rotation on source images on dataset --------------
-Mean error for image 0 : 46.5625px
-Mean error for image 0 : 76.390625px
-Mean error for image 0 : 50.5390625px
-Mean error for image 0 : 60.203125px
-Mean error for image 0 : 58.8046875px
-Mean error for image 0 : 69.9140625px
-Mean error for image 0 : 68.0625px
-Mean error for image 1 : 58.6875px
-There is 61.1455078125 pixel mean error.
+
 
 -------------- Results using 2deg rotation on source images on dataset --------------
-Mean error for image 0 : 46.5625px
-Mean error for image 0 : 76.390625px
-Mean error for image 0 : 50.5390625px
-Mean error for image 0 : 60.203125px
-Mean error for image 0 : 58.8046875px
-Mean error for image 0 : 69.9140625px
-Mean error for image 0 : 68.0625px
-Mean error for image 1 : 58.6875px
-There is 61.1455078125 pixel mean error.
-
--------------- Results using 2deg rotation on source images on dataset --------------
-Mean error for image 0 : 0.0625px
-Mean error for image 0 : 0.1171875px
-Mean error for image 0 : 0.09375px
-Mean error for image 0 : 0.1796875px
+Mean error for image 0 : 0.0390625px
+Mean error for image 0 : 0.125px
+Mean error for image 0 : 0.0703125px
+Mean error for image 0 : 0.171875px
 Mean error for image 0 : 0.109375px
-Mean error for image 0 : 0.1484375px
-Mean error for image 0 : 6.9765625px
-Mean error for image 1 : 44.765625px
-There is 6.556640625 pixel mean error.
+Mean error for image 0 : 0.1171875px
+Mean error for image 0 : 2.25px
+Mean error for image 1 : 4.65625px
+There is 0.9423828125 pixel mean error.
 

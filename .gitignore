@@ -1,8 +1,7 @@
 <<<<<<< HEAD
-datasets/templates/
-datasets/testing/
-report/source-diverse/
+datasets/travel-assist/templates/
+datasets/travel-assist/testing/
 =======
-datasets/templates/
-datasets/testing/
+datasets/travel-assist/templates/
+datasets/travel-assist/testing/
 >>>>>>> develop

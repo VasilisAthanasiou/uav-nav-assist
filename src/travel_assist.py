@@ -37,7 +37,7 @@ def draw_image(img, x, y, radius=10, color=(0, 0, 255)):
 
 
 def snap_image(img, top_x, top_y, dim):
-    return img[top_x:top_x + dim, top_y:top_y + dim]
+    return img[top_y:top_y + dim, top_x:top_x + dim]
 
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
@@ -231,8 +231,9 @@ class Simulator:
         capt_top_left = (actual_capture_coord[0] - int(capture_dim / 2),  # Top left pixel location of captured image
                          actual_capture_coord[1] - int(capture_dim / 2))
         # Cropping the UAV image
-        captured_img = snap_image(sim_uav_image, capt_top_left[1], capt_top_left[1], capture_dim)
+        captured_img = snap_image(sim_uav_image, capt_top_left[0], capt_top_left[1], capture_dim)
 
+        # Displaying the actual UAV location on the satellite image
         marked_loc_img = draw_image(sat_image, actual_capture_coord[0], actual_capture_coord[1], color=(255, 0, 0))
         cv.imshow('Actual UAV location', marked_loc_img)
         cv.imshow('Captured image', captured_img)
@@ -254,9 +255,11 @@ class Simulator:
         # Find where the captured image is located relative to the satellite image
         captured_image_location = findTarget(sat_image, captured_img)  # Top-left location of the template image
 
+        # captured_image_location contains the top left pixel location of matched image. Calculate the central pixel
         captured_img_center = (captured_image_location[0] + int(captured_img.shape[0] / 2),
                                captured_image_location[1] + int(captured_img.shape[1] / 2))
 
+        # Diplay both the actual and the calculated UAV position on the image
         marked_loc_img = draw_image(marked_loc_img, captured_img_center[0], captured_img_center[1])
         cv.imshow('Actual location (Blue) vs Calculated location (Red)', marked_loc_img)
         wait_for_esc()
@@ -311,16 +314,27 @@ class Simulator:
 
 
     def simulate(self, sat_dir, sim_uav_dir, use_defaults, inertial_error=np.random.uniform(0, 2)):
-        
+        """
+
+        Args:
+            sat_dir: Directory of satellite images
+            sim_uav_dir: Directory of UAV images
+            use_defaults: Determines whether to use default Simulation.params values or have the user set them
+            inertial_error: Simulates the heading inaccuracy caused by the INS
+
+        Returns:
+
+        """
         self._init_variables(sat_dir, sim_uav_dir, use_defaults)
         
         # Simulation loop
         for index in range(len(self.sat_images)):
-            # Run a simulation with
+            # Run a simulation with _verbose_sim. Another method could also be used
             try:
                 x_error, y_error = self._verbose_sim(self.sat_images[index], self.sim_uav_images[index], inertial_error)
             except cv.error as e:
                 print('UAV flew outside the expected region\n\n{}'.format(e))
+                return
             # Accumulate the central displacement error
             self.dx += x_error
             self.dy += y_error
@@ -373,7 +387,7 @@ class UI:
         self._method = method
         self.simulator = None
         self.evaluator = None
-        self.cwd = '../datasets'
+        self.cwd = '../datasets/travel-assist'
 
     def experiment(self, method):
         """
@@ -423,11 +437,10 @@ class UI:
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
 # ----------------------------------------------------- Main ------------------------------------------------------------------- #
-print('hello world')
-# ui = UI()
-# ui.experiment('simulation')  # Either 'simulation', 'plot' or 'write text'
+ui = UI()
+ui.experiment('simulation')  # Either 'simulation', 'plot' or 'write text'
 
-sim = Simulator()
-sim.simulate('../datasets/sources/source-diverse/1.source', '../datasets/sources/source-diverse/1.source', 'y', 5)
+# sim = Simulator()
+# sim.simulate('../datasets/travel-assist/sources/source-diverse/1.source', '../datasets/travel-assist/sources/source-diverse/3.cloudy-images', True, 10)
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
