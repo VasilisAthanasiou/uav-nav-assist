@@ -4,8 +4,6 @@ import os
 import imutils
 from matplotlib import pyplot as plt
 import app.src.unautil.utils as ut
-from app.src.unautil.utils import UI
-
 
 # ------------------------------------------------- Image Processing ----------------------------------------------------------- #
 
