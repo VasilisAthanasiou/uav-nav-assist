@@ -45,7 +45,7 @@ class UI:
 
     def __init__(self, method=''):
         self._method = method
-        self.cwd = '../datasets'
+        self.cwd = '../../datasets'
 
     def experiment(self, method):
         """
@@ -64,7 +64,19 @@ class UI:
         elif (self._method == 'plot') or (self._method == 'write text'):
             self.cwd += '/travel-assist'
             return self._use_evaluation()
+        elif self._method == 'guide':
+            return self._use_guide()
 
+    def _use_simulation(self):
+        # This method is called in app.src.core.travel_assist
+        pass
 
+    def _use_evaluation(self):
+        # This method is called in app.src.core.travel_assist
+        pass
+
+    def _use_guide(self):
+        # This method is called in app.src.core.image_homing_guidance
+        pass
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
