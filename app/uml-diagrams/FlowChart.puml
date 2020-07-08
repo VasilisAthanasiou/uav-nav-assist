@@ -1,0 +1,16 @@
+@startuml
+
+
+
+
+start
+while(still alive?)
+
+    :check camera feed;
+    :perform algorithm on camera\nfeed and reference image;
+    :correct course;
+endwhile
+
+stop
+
+@enduml

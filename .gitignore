@@ -1,7 +1,7 @@
 <<<<<<< HEAD
-datasets/travel-assist/templates/
-datasets/travel-assist/testing/
+app/datasets/travel-assist/templates/
+app/datasets/travel-assist/testing/
 =======
-datasets/travel-assist/templates/
-datasets/travel-assist/testing/
+app/datasets/travel-assist/templates/
+app/datasets/travel-assist/testing/
 >>>>>>> develop

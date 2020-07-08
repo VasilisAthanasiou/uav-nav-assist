@@ -3,44 +3,9 @@ import numpy as np
 import os
 import imutils
 from matplotlib import pyplot as plt
+import app.src.unautil.utils as ut
+from app.src.unautil.utils import UI
 
-
-# -------------------------------------------------- Misc Methods -------------------------------------------------------------- #
-
-def wait_for_esc():
-    while True:
-        if cv.waitKey(1) == 27:
-            cv.destroyAllWindows()
-            break
-
-
-def yes_no(arg):
-    args = (['y', 'Y', 'yes', 'Yes', 'YES'], ['n', 'N', 'no', 'No', 'NO'])
-    while True:
-        if arg in args[0]:
-            return True
-        elif arg in args[1]:
-            return False
-        else:
-            print("Please give a correct answer: ['y', 'Y', 'yes', 'Yes', 'YES'] or ['n', 'N', 'no', 'No', 'NO']")
-
-
-def draw_image(img, x, y, radius=10, color=(0, 0, 255)):
-    try:
-        img = cv.cvtColor(img, cv.COLOR_GRAY2BGR)
-    except cv.error:
-        cv.circle(img, (x, y), radius, color, -1)
-        return img
-
-    cv.circle(img, (x, y), radius, color, -1)
-    return img
-
-
-def snap_image(img, top_x, top_y, dim):
-    return img[top_y:top_y + dim, top_x:top_x + dim]
-
-
-# ------------------------------------------------------------------------------------------------------------------------------ #
 
 # ------------------------------------------------- Image Processing ----------------------------------------------------------- #
 
@@ -62,7 +27,6 @@ class Processor:
 
     def __init__(self):
         self.processed_img = None
-
 
     def process_image(self, src_img, rot_deg=0, args=None):
         """Applies image processing techniques on an image.
@@ -127,13 +91,11 @@ class Evaluator:
         self.error = 0.0
         self.result_txt = ''
 
-
     def evaluate(self, method):
         if method == 'write text':
             return self._write_experiment()
         elif method == 'plot':
             return self._plot_data()
-
 
     def _run_evaluation(self):
         self.img_error = []  # Error for each image Sum(error for every template / number of templates)
@@ -163,7 +125,6 @@ class Evaluator:
         # Error for all images
         self.error = sum(self.img_error) / len(self.src)
         self.result_txt += ("There is {} pixel mean error.\n\n".format(self.error))
-
 
     def _write_experiment(self):
         # Write the experiment results on a text file
@@ -205,7 +166,6 @@ class Simulator:
         self.dx = 0
         self.dy = 0
 
-
     def _verbose_sim(self, sat_image, sim_uav_image, inertial_error):
         """ Performs simulation with detailed output, including images and console prints
 
@@ -231,13 +191,13 @@ class Simulator:
         capt_top_left = (actual_capture_coord[0] - int(capture_dim / 2),  # Top left pixel location of captured image
                          actual_capture_coord[1] - int(capture_dim / 2))
         # Cropping the UAV image
-        captured_img = snap_image(sim_uav_image, capt_top_left[0], capt_top_left[1], capture_dim)
+        captured_img = ut.snap_image(sim_uav_image, capt_top_left[0], capt_top_left[1], capture_dim)
 
         # Displaying the actual UAV location on the satellite image
-        marked_loc_img = draw_image(sat_image, actual_capture_coord[0], actual_capture_coord[1], color=(255, 0, 0))
+        marked_loc_img = ut.draw_image(sat_image, actual_capture_coord[0], actual_capture_coord[1], color=(255, 0, 0))
         cv.imshow('Actual UAV location', marked_loc_img)
         cv.imshow('Captured image', captured_img)
-        wait_for_esc()
+        ut.wait_for_esc()
 
         # Rotate the image clockwise to simulate the insertion angle plus the INS error
         captured_img = prc.process_image(captured_img, rot_deg=heading + inertial_error, args=['rotate'])
@@ -260,9 +220,9 @@ class Simulator:
                                captured_image_location[1] + int(captured_img.shape[1] / 2))
 
         # Diplay both the actual and the calculated UAV position on the image
-        marked_loc_img = draw_image(marked_loc_img, captured_img_center[0], captured_img_center[1])
+        marked_loc_img = ut.draw_image(marked_loc_img, captured_img_center[0], captured_img_center[1])
         cv.imshow('Actual location (Blue) vs Calculated location (Red)', marked_loc_img)
-        wait_for_esc()
+        ut.wait_for_esc()
 
         # Course correction data
         x_error, y_error = captured_img_center[0] - actual_capture_coord[0], captured_img_center[1] - actual_capture_coord[1]
@@ -270,9 +230,8 @@ class Simulator:
         print('The UAV is off center {} meters horizontally and {} meters vertically\n'
               'And the error is {:.2f} meters horizontally and {:.2f} meters vertically\n\n'.format(
             sensed_center_displacement[0], sensed_center_displacement[1], x_error, y_error))
-        
-        return x_error, y_error
 
+        return x_error, y_error
 
     def _set_uav_params(self, use_defaults):
         if not use_defaults:
@@ -282,7 +241,6 @@ class Simulator:
             heading = int(input('Enter heading angle relative to true North\n'))
             capture_dim = int(input('Enter the dimension of the captured images. Default is 200\n'))
             self.params = int(dist_center), dx_bias, dy_bias, int(heading), int(capture_dim)
-
 
     def _init_variables(self, sat_dir, sim_uav_dir, use_defaults):
         """
@@ -312,7 +270,6 @@ class Simulator:
 
         return dist_center, dx_bias, dy_bias, heading, capture_dim
 
-
     def simulate(self, sat_dir, sim_uav_dir, use_defaults, inertial_error=np.random.uniform(0, 2)):
         """
 
@@ -326,7 +283,7 @@ class Simulator:
 
         """
         self._init_variables(sat_dir, sim_uav_dir, use_defaults)
-        
+
         # Simulation loop
         for index in range(len(self.sat_images)):
             # Run a simulation with _verbose_sim. Another method could also be used
@@ -381,45 +338,26 @@ class ImageReader:
 
 # -------------------------------------------------- User Interface ------------------------------------------------------------ #
 
-class UI:
+class TravelUI(ut.UI):
 
     def __init__(self, method=''):
-        self._method = method
+        super(TravelUI, self).__init__()
         self.simulator = None
         self.evaluator = None
-        self.cwd = '../datasets/travel-assist'
-
-    def experiment(self, method):
-        """
-
-        Args:
-            method: Selects the method to run. Can be = 'simulation', 'plot', 'write text'
-        """
-        self._method = method
-        return self._get_method()
-
-
-    def _get_method(self):
-
-        if self._method == 'simulation':
-            return self._use_simulation()
-        elif (self._method == 'plot') or (self._method == 'write text'):
-            return self._use_evaluation()
-
 
     def _use_simulation(self):
 
         self.cwd += '/sources/' + input(' the desired dataset directory\n{}\n'.format(os.listdir(self.cwd + '/sources/')))
         sat_dir = self.cwd + '/' + input('Select satellite image source:\n{}\n'.format(os.listdir(self.cwd))) + '/'
         uav_dir = self.cwd + '/' + input('Select UAV image source:\n{}\n\n'.format(os.listdir(self.cwd)))
-        use_defaults = yes_no(input('Do you want to use the default simulation values? : '))
+        use_defaults = ut.yes_no(input('Do you want to use the default simulation values? : '))
 
         self.simulator = Simulator()
 
         return self.simulator.simulate(sat_dir, uav_dir, use_defaults)
 
-
     def _use_evaluation(self):
+
         src_dir = self.cwd + '/sources/'
         tmp_dir = self.cwd + '/templates/'
         src_dir += input('Select a source directory\n{}\n'.format(os.listdir(src_dir)))
@@ -436,11 +374,13 @@ class UI:
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
+
 # ----------------------------------------------------- Main ------------------------------------------------------------------- #
-ui = UI()
+ui = TravelUI()
 ui.experiment('simulation')  # Either 'simulation', 'plot' or 'write text'
 
 # sim = Simulator()
-# sim.simulate('../datasets/travel-assist/sources/source-diverse/1.source', '../datasets/travel-assist/sources/source-diverse/3.cloudy-images', True, 10)
+# sim.simulate('../datasets/travel-assist/sources/source-diverse/1.source',
+#              '../datasets/travel-assist/sources/source-diverse/3.cloudy-images', True, 10)
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
