@@ -133,7 +133,6 @@ class Evaluator:
                                                                                                                 self.result_txt))
 
     def _plot_data(self):
-
         self._run_evaluation()
         results = [round(self.img_error[counter], 2) for counter in range(len(self.img_error))]
 
@@ -344,7 +343,6 @@ class TravelUI(ut.UI):
         self.evaluator = None
 
     def _use_simulation(self):
-
         self.cwd += '/sources/' + input(' the desired dataset directory\n{}\n'.format(os.listdir(self.cwd + '/sources/')))
         sat_dir = self.cwd + '/' + input('Select satellite image source:\n{}\n'.format(os.listdir(self.cwd))) + '/'
         uav_dir = self.cwd + '/' + input('Select UAV image source:\n{}\n\n'.format(os.listdir(self.cwd)))
@@ -355,7 +353,6 @@ class TravelUI(ut.UI):
         return self.simulator.simulate(sat_dir, uav_dir, use_defaults)
 
     def _use_evaluation(self):
-
         src_dir = self.cwd + '/sources/'
         tmp_dir = self.cwd + '/templates/'
         src_dir += input('Select a source directory\n{}\n'.format(os.listdir(src_dir)))
