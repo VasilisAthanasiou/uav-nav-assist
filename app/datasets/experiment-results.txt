@@ -1,0 +1,97 @@
+-------------- Results using 0deg rotation on source images on dataset --------------
+Error for template (400, 400) : 231
+Template max value : 41027904
+
+Error for template (390, 390) : 198
+Template max value : 38581844
+
+Error for template (300, 300) : 98
+Template max value : 34815104
+
+Error for template (200, 200) : 0
+Template max value : 117165816
+
+Error for template (150, 150) : 288
+Template max value : 15142762
+
+Error for template (100, 100) : 442
+Template max value : 8007417
+
+Mean error for image 1 : 209.5px
+There is 209.5 pixel mean error.
+
+-------------- Results using 0deg rotation on source images on dataset --------------
+Error for template (400, 400) : 231
+Template max value : 41027904.00
+
+Error for template (390, 390) : 198
+Template max value : 38581844.00
+
+Error for template (300, 300) : 98
+Template max value : 34815104.00
+
+Error for template (200, 200) : 0
+Template max value : 117165816.00
+
+Error for template (150, 150) : 288
+Template max value : 15142762.00
+
+Error for template (100, 100) : 442
+Template max value : 8007417.00
+
+Error for template (400, 400) : 0
+Template max value : 426180256.00
+
+Mean error for image 1 : 179.57142857142858px
+There is 179.57142857142858 pixel mean error.
+
+-------------- Results using 0deg rotation on source images on dataset --------------
+Error for template (400, 400) : 231
+Template max value : 0.09
+
+Error for template (390, 390) : 198
+Template max value : 0.09
+
+Error for template (300, 300) : 98
+Template max value : 0.14
+
+Error for template (200, 200) : 0
+Template max value : 1.00
+
+Error for template (150, 150) : 288
+Template max value : 0.24
+
+Error for template (100, 100) : 442
+Template max value : 0.27
+
+Error for template (400, 400) : 0
+Template max value : 1.00
+
+Mean error for image 1 : 179.57142857142858px
+There is 179.57142857142858 pixel mean error.
+
+-------------- Results using 2deg rotation on source images on dataset --------------
+Error for template (400, 400) : 102
+Template max value : 0.09
+
+Error for template (390, 390) : 88
+Template max value : 0.10
+
+Error for template (300, 300) : 232
+Template max value : 0.13
+
+Error for template (200, 200) : 0
+Template max value : 0.66
+
+Error for template (150, 150) : 328
+Template max value : 0.23
+
+Error for template (100, 100) : 442
+Template max value : 0.30
+
+Error for template (400, 400) : 1
+Template max value : 0.44
+
+Mean error for image 1 : 170.42857142857142px
+There is 170.42857142857142 pixel mean error.
+

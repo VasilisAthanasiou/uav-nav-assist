@@ -35,7 +35,7 @@ The missile is dependant of the travel_assist program to guide it through great 
 ## Flowchart
 Here is a quick look on how the program should operate
 
-![Flowchart](../report/images-plots/homing-guidance/FlowChart.png)
+![Flowchart](uml-diagrams/FlowChart.png)
 
 
 ## Algorithm candidates  

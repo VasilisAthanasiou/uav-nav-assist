@@ -45,7 +45,7 @@ class UI:
 
     def __init__(self, method=''):
         self._method = method
-        self.cwd = '../../datasets'
+        self.cwd = '../datasets'
 
     def experiment(self, method):
         """

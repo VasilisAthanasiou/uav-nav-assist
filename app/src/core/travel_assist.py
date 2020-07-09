@@ -1,15 +1,18 @@
 import cv2 as cv
+import time
 import numpy as np
 import os
 import imutils
 from matplotlib import pyplot as plt
 import app.src.unautil.utils as ut
 
-# ------------------------------------------------- Image Processing ----------------------------------------------------------- #
+
+# ------------------------------------------------------- Image Processing --------------------------------------------------------------- #
 
 def _grayscale(img):
     # Convert to grayscale
     try:
+
         return cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     except cv.error:
         # The image was probably already converted to grayscale
@@ -45,29 +48,112 @@ class Processor:
         return self.processed_img
 
 
-# ------------------------------------------------------------------------------------------------------------------------------ #
+# ---------------------------------------------------------------------------------------------------------------------------------------- #
 
-# --------------------------------------------- Matching Algorithm ------------------------------------------------------------- #
+# -------------------------------------------------- Matching Algorithm ------------------------------------------------------------------ #
 
-# Returns the top left pixel location of the sensed template
-def findTarget(src, temp):
-    """Uses openCV's matchTemplate to find a desired target inside the source image.
+class Matcher:
 
-    :param src: Source image
-    :param temp: Template image
-    :return: Tuple containing the sensed target top left coordinates
-    """
+    def __init__(self):
+        self.src = None
+        self.temp = None
 
-    # Apply template matching
-    res = cv.matchTemplate(src, temp, cv.TM_CCOEFF)
-    min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
+    # Returns the top left pixel location of the sensed template
+    def findTarget(self, src, temp, method):
+        """Uses openCV's matchTemplate to find a desired target inside the source image.
 
-    return max_loc  # Return top left position
+        :param src: Source image
+        :param temp: Template image
+        :return: Tuple containing the sensed target top left coordinates
+        """
+        self.src = src
+        self.temp = temp
+
+        return self._select_matcher(method)
+
+    def _select_matcher(self, arg):
+        if arg == 'template matching':
+            return self._template_matching()
+        elif arg == 'sift matching':
+            return self._sift_matching()
+        elif arg == 'fast matching':
+            return self._fast_feature_detector()
 
 
-# ------------------------------------------------------------------------------------------------------------------------------ #
 
-# --------------------------------------------- Statistical Analysis ----------------------------------------------------------- #
+    def _template_matching(self):
+        # Apply template matching
+        start_time = time.time()
+        max_val = 0
+        prev_max = 0
+
+        res = cv.matchTemplate(self.src, self.temp, cv.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
+
+        # Zoom the image out initially
+        image = self.temp
+        resize_value = 0.9
+
+        while max_val < 0.6:
+
+            image = imutils.resize(image, int(image.shape[0] * resize_value), int(image.shape[1] * resize_value))
+            res = cv.matchTemplate(self.src, image, cv.TM_CCOEFF_NORMED)
+            min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
+            print('Image shape : {} , Max value : {} '.format(image.shape, max_val))
+
+            if prev_max > max_val:
+                # Zoom the image in
+                resize_value = 1.1
+                image = self.temp
+            prev_max = max_val
+
+        end_time = time.time()
+        print('Template Matching took {:.2f}s'.format((end_time - start_time)))
+        return max_loc[0], max_loc[1], max_val  # Return top left position
+
+    def _sift_matching(self):
+        start_time = time.time()
+        sift = cv.xfeatures2d.SIFT_create()
+
+        keyp_src, desc_src = sift.detectAndCompute(self.src, None)
+        keyp_temp, desc_temp = sift.detectAndCompute(self.temp, None)
+
+        # Feature matching
+        bf = cv.BFMatcher(cv.NORM_L1, crossCheck=True)
+
+        end_time = time.time()
+        print('Sift Matching took {:.2f}s'.format((end_time - start_time)))
+
+        matches = sorted(bf.match(desc_src, desc_temp), key=lambda x: x.distance)
+
+        res = cv.drawMatches(self.src, keyp_src, self.temp, keyp_temp, matches[:50], self.temp, flags=2)
+        plt.imshow(res), plt.show()
+
+    def _fast_feature_detector(self):
+        start_time = time.time()
+
+        fast = cv.FastFeatureDetector_create()
+
+        keyp_src = fast.detect(self.src, None)
+        keyp_temp = fast.detect(self.temp, None)
+
+        res = cv.drawKeypoints(self.src, keyp_src, self.src, color=(255, 0, 0)), cv.drawKeypoints(self.temp, keyp_temp, self.temp,
+                                                                                                  color=(0, 0, 255))
+
+        end_time = time.time()
+        print('Fast Matching took {:.2f}s'.format((end_time - start_time)))
+
+        fig = plt.figure()
+        ax1 = fig.add_subplot(2, 2, 1)
+        plt.imshow(res[0])
+        ax2 = fig.add_subplot(2, 2, 2)
+        plt.imshow(res[1])
+        plt.show()
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------------- #
+
+# ------------------------------------------------------- Statistical Analysis ----------------------------------------------------------- #
 
 class Evaluator:
     """Performs the find_target() function for multiple source images on multiple templates, compares the results with
@@ -101,6 +187,7 @@ class Evaluator:
         print(n_templates)
         counter = 0  # Keeps track of each iterations
         prc = Processor()
+        matcher = Matcher()
 
         for img in self.src:
 
@@ -110,11 +197,12 @@ class Evaluator:
             for i in range(int(n_templates / len(self.src))):
                 # Store both actual and sensed x and y
                 actual_x, actual_y, _ = self.actual_match[i].split(',')
-                sensed_x, sensed_y = findTarget(processed_img, prc.process_image(self.temp[counter], rot_deg=self.rotation,
-                                                                                 args=['grayscale', 'rotate']))
+                sensed_x, sensed_y, value = matcher.findTarget(processed_img, prc.process_image(self.temp[counter], rot_deg=self.rotation,
+                                                                                 args=['grayscale', 'rotate']), method='template matching')
 
                 # Error for one template is the added absolute differences between x and y divided the number of pixels
                 error_temp_img += np.abs(int(sensed_x) - int(actual_x)) + np.abs(int(sensed_y) - int(actual_y))
+                self.result_txt += 'Error for template {} : {}\nTemplate max value : {:.2f}\n'.format(self.temp[counter].shape, np.abs(int(sensed_x) - int(actual_x)) + np.abs(int(sensed_y) - int(actual_y)), value) + '\n'
                 counter += 1
 
             self.img_error.append(error_temp_img / n_templates)  # Error for a whole image tested with multiple templates
@@ -127,7 +215,7 @@ class Evaluator:
     def _write_experiment(self):
         # Write the experiment results on a text file
         self._run_evaluation()
-        file = open("../experiment-results.txt", "a")
+        file = open("../datasets/experiment-results.txt", "a")
         file.write(
             "-------------- Results using {}deg rotation on source images on dataset --------------\n{}".format(self.rotation,
                                                                                                                 self.result_txt))
@@ -150,9 +238,9 @@ class Evaluator:
         plt.show()
 
 
-# ------------------------------------------------------------------------------------------------------------------------------ #
+# ---------------------------------------------------------------------------------------------------------------------------------------- #
 
-# -------------------------------------------------- Simulation ---------------------------------------------------------------- #
+# ------------------------------------------------------ Simulation ---------------------------------------------------------------------- #
 
 class Simulator:
 
@@ -177,6 +265,7 @@ class Simulator:
         _, dx_bias, dy_bias, heading, capture_dim = self.params
 
         prc = Processor()
+        matcher = Matcher()
         # Set center of satellite images
         sat_image_center = (int(sat_image.shape[0] / 2), int(sat_image.shape[1] / 2))
 
@@ -210,11 +299,12 @@ class Simulator:
                        int(captured_img.shape[1] / 4):int(captured_img.shape[1] / 4) + int(captured_img.shape[1] / 2)]
 
         # Find where the captured image is located relative to the satellite image
-        captured_image_location = findTarget(sat_image, captured_img)  # Top-left location of the template image
+        cap_location_x, cap_location_y, value = matcher.findTarget(sat_image, captured_img,
+                                                     method='template matching')  # Top-left location of the template image
 
         # captured_image_location contains the top left pixel location of matched image. Calculate the central pixel
-        captured_img_center = (captured_image_location[0] + int(captured_img.shape[0] / 2),
-                               captured_image_location[1] + int(captured_img.shape[1] / 2))
+        captured_img_center = (cap_location_x + int(captured_img.shape[0] / 2),
+                               cap_location_y + int(captured_img.shape[1] / 2))
 
         # Diplay both the actual and the calculated UAV position on the image
         marked_loc_img = ut.draw_image(marked_loc_img, captured_img_center[0], captured_img_center[1])
@@ -294,9 +384,9 @@ class Simulator:
             self.dy += y_error
 
 
-# ------------------------------------------------------------------------------------------------------------------------------ #
+# ---------------------------------------------------------------------------------------------------------------------------------------- #
 
-# -------------------------------------------------- Setup Data ---------------------------------------------------------------- #
+# ------------------------------------------------------------ Setup Data ---------------------------------------------------------------- #
 
 # Reads images and converts them to grayscale
 class ImageReader:
@@ -331,9 +421,9 @@ class ImageReader:
         return [cv.cvtColor(cv.imread(img_path), cv.COLOR_BGR2GRAY) for img_path in img_paths]
 
 
-# ------------------------------------------------------------------------------------------------------------------------------ #
+# ---------------------------------------------------------------------------------------------------------------------------------------- #
 
-# -------------------------------------------------- User Interface ------------------------------------------------------------ #
+# --------------------------------------------------------- User Interface --------------------------------------------------------------- #
 
 class TravelUI(ut.UI):
 
@@ -359,7 +449,7 @@ class TravelUI(ut.UI):
         src_dir += '/' + input('Specify the source directory\n{}\n'.format(os.listdir(src_dir)))
         tmp_dir += input('Select a template directory\n{}\n'.format(os.listdir(tmp_dir)))
         act_txt_path = tmp_dir + '/' + [file if '.txt' in file else None for file in os.listdir(tmp_dir)][0]
-        tmp_dir += '/' + input('Specify the template directory\n{}\n'.format(os.listdir(tmp_dir)))
+        tmp_dir += '/images/'
         rot = int(input('Enter the template rotation\n'))
 
         self.evaluator = Evaluator(src_dir, tmp_dir, act_txt_path, rotation=rot)
@@ -367,15 +457,15 @@ class TravelUI(ut.UI):
         return self.evaluator.evaluate(self._method)
 
 
-# ------------------------------------------------------------------------------------------------------------------------------ #
+# ---------------------------------------------------------------------------------------------------------------------------------------- #
 
 
-# ----------------------------------------------------- Main ------------------------------------------------------------------- #
+# ----------------------------------------------------------- Main ----------------------------------------------------------------------- #
 ui = TravelUI()
-ui.experiment('simulation')  # Either 'simulation', 'plot' or 'write text'
+ui.experiment('write text')  # Either 'simulation', 'plot' or 'write text'
 
 # sim = Simulator()
 # sim.simulate('../datasets/travel-assist/sources/source-diverse/1.source',
 #              '../datasets/travel-assist/sources/source-diverse/3.cloudy-images', True, 10)
 
-# ------------------------------------------------------------------------------------------------------------------------------ #
+# ---------------------------------------------------------------------------------------------------------------------------------------- #
