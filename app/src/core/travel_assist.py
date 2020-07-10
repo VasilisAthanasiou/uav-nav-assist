@@ -79,13 +79,13 @@ class Matcher:
         elif arg == 'fast matching':
             return self._fast_feature_detector()
 
-
-
     def _template_matching(self):
         # Apply template matching
         start_time = time.time()
         max_val = 0
         prev_max = 0
+        # This coefficient prevents the algorithm from getting stuck in a loop
+        cycle_prevent_coeff = 0.016
 
         res = cv.matchTemplate(self.src, self.temp, cv.TM_CCOEFF_NORMED)
         min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
@@ -94,24 +94,32 @@ class Matcher:
         image = self.temp
         resize_value = 0.9
 
-        while max_val < 0.6:
-
+        while max_val < 0.58:
             image = imutils.resize(image, int(image.shape[0] * resize_value), int(image.shape[1] * resize_value))
             res = cv.matchTemplate(self.src, image, cv.TM_CCOEFF_NORMED)
             min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
             print('Image shape : {} , Max value : {} '.format(image.shape, max_val))
 
-            if prev_max > max_val:
+            if prev_max > max_val + cycle_prevent_coeff:
                 # Zoom the image in
                 resize_value = 1.1
                 image = self.temp
             prev_max = max_val
+            if time.time() - start_time > 3.0:
+                res = cv.matchTemplate(self.src, self.temp, cv.TM_CCOEFF_NORMED)
+                min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
+                break
 
         end_time = time.time()
         print('Template Matching took {:.2f}s'.format((end_time - start_time)))
         return max_loc[0], max_loc[1], max_val  # Return top left position
 
     def _sift_matching(self):
+        """Performs the Scale Invariant Feature Transform on two images and matches each corresponding keypoint
+
+        Returns:
+
+        """
         start_time = time.time()
         sift = cv.xfeatures2d.SIFT_create()
 
@@ -130,6 +138,13 @@ class Matcher:
         plt.imshow(res), plt.show()
 
     def _fast_feature_detector(self):
+
+        """Performs the FAST (Features from Accelerated Segment Test) feature extraction method on an image and displays
+        the detected keypoints
+
+        Returns:
+
+        """
         start_time = time.time()
 
         fast = cv.FastFeatureDetector_create()
@@ -153,7 +168,7 @@ class Matcher:
 
 # ---------------------------------------------------------------------------------------------------------------------------------------- #
 
-# ------------------------------------------------------- Statistical Analysis ----------------------------------------------------------- #
+# ------------------------------------------------------- Statistical Evaluation --------------------------------------------------------- #
 
 class Evaluator:
     """Performs the find_target() function for multiple source images on multiple templates, compares the results with
@@ -202,8 +217,11 @@ class Evaluator:
 
                 # Error for one template is the added absolute differences between x and y divided the number of pixels
                 error_temp_img += np.abs(int(sensed_x) - int(actual_x)) + np.abs(int(sensed_y) - int(actual_y))
-                self.result_txt += 'Error for template {} : {}\nTemplate max value : {:.2f}\n'.format(self.temp[counter].shape, np.abs(int(sensed_x) - int(actual_x)) + np.abs(int(sensed_y) - int(actual_y)), value) + '\n'
+
+                # self.result_txt += 'Error for template {} : {}\nTemplate max value : {:.2f}\n'.format(self.temp[counter].shape, np.abs(
+                #     int(sensed_x) - int(actual_x)) + np.abs(int(sensed_y) - int(actual_y)), value) + '\n'
                 counter += 1
+
 
             self.img_error.append(error_temp_img / n_templates)  # Error for a whole image tested with multiple templates
             self.result_txt += ("Mean error for image {} : {}px\n".format(int(counter / n_templates),
@@ -300,7 +318,7 @@ class Simulator:
 
         # Find where the captured image is located relative to the satellite image
         cap_location_x, cap_location_y, value = matcher.findTarget(sat_image, captured_img,
-                                                     method='template matching')  # Top-left location of the template image
+                                                                   method='template matching')  # Top-left location of the template image
 
         # captured_image_location contains the top left pixel location of matched image. Calculate the central pixel
         captured_img_center = (cap_location_x + int(captured_img.shape[0] / 2),

@@ -17,17 +17,17 @@ class Detector:
             labels: Path for the network labels file
         """
         self.config, self.weights = config, weights
-        self.image = None
+        # self.image = None
         self.labels = labels
 
         # Create a list of colors that will be used for bounding boxes
         np.random.seed(42)
         self.COLORS = np.random.randint(0, 255, size=(len(self.labels), 3), dtype="uint8")
 
-
         # Initialize network
         self.net = self._init_network()
         # Determine the *output* layer names needed from YOLO
+
         self.layer_names = [self.net.getLayerNames()[i[0] - 1] for i in self.net.getUnconnectedOutLayers()]
 
         self.start_time = time.time()
@@ -38,7 +38,7 @@ class Detector:
             return cv.dnn.readNetFromDarknet(self.config, self.weights)
 
 
-    def _extract_output_data(self, layer_outputs):
+    def _extract_output_data(self, layer_outputs, image):
         """Takes in network output data and processes it into useful data that will be used
         for bounding boxes, confidences and class IDs
 
@@ -53,7 +53,7 @@ class Detector:
         confidences = []
         class_ids = []
         centers = []
-        height, width = self.image.shape[:2]
+        height, width = image.shape[:2]
 
         # Loop over each of the layer outputs
         for output in layer_outputs:
@@ -70,6 +70,7 @@ class Detector:
 
                     # Scale the bounding box coordinates back relative to the size of the image, keeping in mind that YOLO
                     # actually returns the center (x, y)-coordinates of the bounding box followed by the boxes' width and height
+
                     box = detection[0:4] * np.array([width, height, width, height])
                     (center_x, center_y, width, height) = box.astype("int")
 
@@ -79,7 +80,7 @@ class Detector:
                     y = int(center_y - (height / 2))
 
                     # Update list of bounding box coordinates, confidences, and class IDs
-                    boxes.append([x, y, x + int(width), y + int(height)])
+                    boxes.append([x, y, int(width), int(height)])
                     confidences.append(float(confidence))
                     class_ids.append(class_id)
                     centers.append((center_x, center_y))
@@ -87,7 +88,7 @@ class Detector:
         return boxes, confidences, class_ids, centers
 
 
-    def _draw_boxes(self, boxes, confidences, class_ids, centers):
+    def _draw_boxes(self, boxes, confidences, class_ids, centers, image):
         """
 
         Args:
@@ -99,7 +100,7 @@ class Detector:
 
         """
         # Apply non-maxima suppression to suppress weak, overlapping bounding boxes
-        indices = cv.dnn.NMSBoxes(boxes, confidences, 0.5, 0.5)
+        indices = cv.dnn.NMSBoxes(boxes, confidences, 0.5, 0.3)
 
         # Ensure at least one detection exists
         if len(indices) > 0:
@@ -108,16 +109,17 @@ class Detector:
             for i in indices.flatten():
 
                 # Extract the bounding box coordinates
-                (x_start, y_start) = (boxes[i][0], boxes[i][1])
-                (x_end, y_end) = (boxes[i][2], boxes[i][3])
+                (x, y) = (boxes[i][0], boxes[i][1])
+                (w, h) = (boxes[i][2], boxes[i][3])
 
                 # Draw a bounding box rectangle and label on the image
                 color = [int(c) for c in self.COLORS[class_ids[i]]]
-                cv.rectangle(self.image, (x_start, y_start), (x_end, y_end), color, 2)
+                cv.rectangle(image, (x, y), (x + w, y + h), color, 2)
                 text = "{}: {:.4f}".format(self.labels[class_ids[i]], confidences[i])
-                cv.putText(self.image, text, (x_start, y_start - 5), cv.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-                ut.draw_image(self.image, centers[i][0], centers[i][1], 5, color)
+                cv.putText(image, text, (x, y - 5), cv.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+                ut.draw_image(image, centers[i][0], centers[i][1], 5, color)
 
+        return image
 
     def detect(self, image, blob_size=(320, 320)):
 
@@ -130,22 +132,22 @@ class Detector:
 
         """
         # Initialize image
-        self.image = image
+        # self.image = image
 
         # Construct a blob from the input image and then perform a forward
         # pass of the YOLO object detector, giving us our bounding boxes and
         # associated probabilities
-        blob = cv.dnn.blobFromImage(self.image, 1 / 255.0, blob_size, swapRB=True, crop=False)
+        blob = cv.dnn.blobFromImage(image, 1 / 255.0, blob_size, swapRB=True, crop=False)
         self.net.setInput(blob)
 
         layer_outputs = self.net.forward(self.layer_names)
 
         # Process the output layer data
-        boxes, confidences, class_ids, centers = self._extract_output_data(layer_outputs)
+        boxes, confidences, class_ids, centers = self._extract_output_data(layer_outputs, image)
 
-        self._draw_boxes(boxes, confidences, class_ids, centers)
+        return self._draw_boxes(boxes, confidences, class_ids, centers, image)
 
-        return self.image
+        # return self.image
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
@@ -180,7 +182,6 @@ class HomingUI(ut.UI):
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
 # ---------------------------------------------- Main -------------------------------------------------------------------------- #
-
 # Load our input image and grab its spatial dimensions
 cap = cv.VideoCapture(0)
 
@@ -200,13 +201,15 @@ while True:
     _, frame = cap.read()
     # Perform image processing
 
-
     # Perform object detection
-    frame = det.detect(frame)
+
 
     # Display
-    cv.imshow('Camera', frame)
-    ui.mouse_select()
+    try:
+        cv.imshow('Camera', det.detect(frame, blob_size=(244, 244)))
+        ui.mouse_select()
+    except cv.error:
+        cv.destroyAllWindows()
 
     # Wait for ESC
     if cv.waitKey(1) == 27:
@@ -217,4 +220,110 @@ print(det.image.shape)
 
 cap.release()
 cv.destroyAllWindows()
+
+
+# # Load labels
+# labels_path = '../../datasets/models/coco.names'
+# LABELS = open(labels_path).read().strip().split("\n")
+#
+# config_path = '../../datasets/models/yolov3/yolov3-tiny.cfg'
+# weights_path = '../../datasets/models/yolov3/yolov3-tiny.weights'
+#
+# np.random.seed(42)
+# COLORS = np.random.randint(0, 255, size=(len(LABELS), 3), dtype="uint8")
+#
+# # load our YOLO object detector trained on COCO dataset (80 classes)
+# print("[INFO] loading YOLO from disk...")
+# net = cv.dnn.readNetFromDarknet(config_path, weights_path)
+#
+# cap = cv.VideoCapture(0)
+# # determine only the *output* layer names that we need from YOLO
+# ln = net.getLayerNames()
+# ln = [ln[i[0] - 1] for i in net.getUnconnectedOutLayers()]
+#
+# while True:
+#     ret, frame = cap.read()
+#     # load our input image and grab its spatial dimensions
+#     image = frame
+#     (H, W) = image.shape[:2]
+#     print(H, W)
+#     # construct a blob from the input image and then perform a forward
+#     # pass of the YOLO object detector, giving us our bounding boxes and
+#     # associated probabilities
+#     blob = cv.dnn.blobFromImage(image, 1 / 255.0, (244, 244), swapRB=True, crop=False)
+#     net.setInput(blob)
+#     start = time.time()
+#     layerOutputs = net.forward(ln)
+#     end = time.time()
+#     # show timing information on YOLO
+#     print("[INFO] YOLO took {:.6f} seconds".format(end - start))
+#
+#     boxes = []
+#     confidences = []
+#     classIDs = []
+#
+#
+#
+#     # loop over each of the layer outputs
+#     for output in layerOutputs:
+#         # loop over each of the detections
+#         for detection in output:
+#             # extract the class ID and confidence (i.e., probability) of
+#             # the current object detection
+#             scores = detection[5:]
+#             classID = np.argmax(scores)
+#             confidence = scores[classID]
+#             # filter out weak predictions by ensuring the detected
+#             # probability is greater than the minimum probability
+#             if confidence > 0.5:
+#                 # scale the bounding box coordinates back relative to the
+#                 # size of the image, keeping in mind that YOLO actually
+#                 # returns the center (x, y)-coordinates of the bounding
+#                 # box followed by the boxes' width and height
+#                 box = detection[0:4] * np.array([W, H, W, H])
+#                 (centerX, centerY, width, height) = box.astype("int")
+#                 # use the center (x, y)-coordinates to derive the top and
+#                 # and left corner of the bounding box
+#                 x = int(centerX - (width / 2))
+#                 y = int(centerY - (height / 2))
+#                 # update our list of bounding box coordinates, confidences,
+#                 # and class IDs
+#                 boxes.append([x, y, int(width), int(height)])
+#                 confidences.append(float(confidence))
+#                 classIDs.append(classID)
+#
+#     idxs = cv.dnn.NMSBoxes(boxes, confidences, 0.5, 0.3)
+#
+#     # ensure at least one detection exists
+#     if len(idxs) > 0:
+#         # loop over the indexes we are keeping
+#         for i in idxs.flatten():
+#             # extract the bounding box coordinates
+#             (x, y) = (boxes[i][0], boxes[i][1])
+#             (w, h) = (boxes[i][2], boxes[i][3])
+#             # draw a bounding box rectangle and label on the image
+#             color = [int(c) for c in COLORS[classIDs[i]]]
+#             cv.rectangle(image, (x, y), (x + w, y + h), color, 2)
+#             text = "{}: {:.4f}".format(LABELS[classIDs[i]], confidences[i])
+#             cv.putText(image, text, (x, y - 5), cv.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+#     # show the output image
+#     cv.imshow("Image", image)
+#     if cv.waitKey(1) == 27:
+#         break
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

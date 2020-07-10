@@ -5,13 +5,13 @@
 import cv2 as cv
 import os
 
-source_directory = '../datasets/sources/source-diverse/1.source'
-templates_directory = '../datasets/templates/templates-diverse/images'
+source_directory = '../../datasets/travel-assist/sources/source-diverse/2.blurred'
+templates_directory = '../../datasets/travel-assist/templates/templates-diverse/images'
 crop_height = 200
 crop_width = 200
 
 # Open text file that will include image name and most left pixel
-file = open("../datasets/templates/templates-diverse/dataset-diverse-loc.txt", "w")
+file = open("../../datasets/travel-assist/templates/templates-diverse/dataset-diverse-loc.txt", "w")
 
 # Append each image path into a list
 source_paths = [os.path.join(source_directory, image_path) for image_path in os.listdir(source_directory)]

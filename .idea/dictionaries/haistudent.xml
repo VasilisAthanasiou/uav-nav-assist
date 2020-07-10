@@ -2,9 +2,13 @@
   <dictionary name="haistudent">
     <words>
       <w>binarize</w>
+      <w>coeff</w>
       <w>dataset</w>
       <w>datasets</w>
       <w>enduml</w>
+      <w>keyp</w>
+      <w>keypoint</w>
+      <w>keypoints</w>
       <w>maxima</w>
       <w>startuml</w>
       <w>yolo</w>
