@@ -93,25 +93,37 @@ class Matcher:
         # Zoom the image out initially
         image = self.temp
         resize_value = 0.9
+        zoom_out = True
+        max_vals = []
 
-        while max_val < 0.58:
-            image = imutils.resize(image, int(image.shape[0] * resize_value), int(image.shape[1] * resize_value))
+        # Perform template matching on different sizes of the template image to find the highest correlation value
+        while max_val < 0.5:
+            image = imutils.resize(self.temp, int(self.temp.shape[0] * resize_value), int(image.shape[1] * resize_value))
             res = cv.matchTemplate(self.src, image, cv.TM_CCOEFF_NORMED)
             min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
             print('Image shape : {} , Max value : {} '.format(image.shape, max_val))
+            max_vals.append((max_val, image.shape))
+
+            if zoom_out:
+                resize_value -= 0.1
+            else:
+                resize_value += 0.1
 
             if prev_max > max_val + cycle_prevent_coeff:
                 # Zoom the image in
                 resize_value = 1.1
                 image = self.temp
+                zoom_out = False
             prev_max = max_val
-            if time.time() - start_time > 3.0:
-                res = cv.matchTemplate(self.src, self.temp, cv.TM_CCOEFF_NORMED)
+            if time.time() - start_time > 1.0:
+                _, (width, height) = max(max_vals, key=lambda value: value[0])
+                image = imutils.resize(self.temp, width, height)
+                res = cv.matchTemplate(self.src, image, cv.TM_CCOEFF_NORMED)
                 min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
                 break
 
         end_time = time.time()
-        print('Template Matching took {:.2f}s'.format((end_time - start_time)))
+        print('Template Matching took {:.2f}s\nImage shape {}'.format((end_time - start_time), image.shape))
         return max_loc[0], max_loc[1], max_val  # Return top left position
 
     def _sift_matching(self):
@@ -218,8 +230,8 @@ class Evaluator:
                 # Error for one template is the added absolute differences between x and y divided the number of pixels
                 error_temp_img += np.abs(int(sensed_x) - int(actual_x)) + np.abs(int(sensed_y) - int(actual_y))
 
-                # self.result_txt += 'Error for template {} : {}\nTemplate max value : {:.2f}\n'.format(self.temp[counter].shape, np.abs(
-                #     int(sensed_x) - int(actual_x)) + np.abs(int(sensed_y) - int(actual_y)), value) + '\n'
+                self.result_txt += 'Error for template {} : {}\nTemplate max value : {:.2f}\n'.format(self.temp[counter].shape, np.abs(
+                    int(sensed_x) - int(actual_x)) + np.abs(int(sensed_y) - int(actual_y)), value) + '\n'
                 counter += 1
 
 
@@ -467,7 +479,7 @@ class TravelUI(ut.UI):
         src_dir += '/' + input('Specify the source directory\n{}\n'.format(os.listdir(src_dir)))
         tmp_dir += input('Select a template directory\n{}\n'.format(os.listdir(tmp_dir)))
         act_txt_path = tmp_dir + '/' + [file if '.txt' in file else None for file in os.listdir(tmp_dir)][0]
-        tmp_dir += '/images/'
+        tmp_dir += '/zoomed-images/'
         rot = int(input('Enter the template rotation\n'))
 
         self.evaluator = Evaluator(src_dir, tmp_dir, act_txt_path, rotation=rot)
