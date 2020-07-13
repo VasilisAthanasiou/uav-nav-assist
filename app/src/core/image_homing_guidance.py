@@ -105,24 +105,42 @@ class Detector:
         """
         # Apply non-maxima suppression to suppress weak, overlapping bounding boxes
         indices = cv.dnn.NMSBoxes(self.boxes, self.confidences, 0.5, 0.3)
-
+        centers_unsuppressed = self.centers.copy()
+        self.centers = []
         # Ensure at least one detection exists
         if len(indices) > 0:
 
             # Loop over the indexes we are keeping
             for i in indices.flatten():
-
                 # Extract the bounding box coordinates
                 (x, y) = (self.boxes[i][0], self.boxes[i][1])
                 (w, h) = (self.boxes[i][2], self.boxes[i][3])
+                self.centers.append(centers_unsuppressed[i])
 
                 # Draw a bounding box rectangle and label on the image
                 color = [int(c) for c in self.COLORS[self.class_ids[i]]]
                 cv.rectangle(self.image, (x, y), (x + w, y + h), color, 2)
                 text = "{}: {:.4f}".format(self.labels[self.class_ids[i]], self.confidences[i])
                 cv.putText(self.image, text, (x, y - 5), cv.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-                ut.draw_image(self.image, self.centers[i][0], self.centers[i][1], 5, color)
+                ut.draw_image(self.image, centers_unsuppressed[i][0], centers_unsuppressed[i][1], 5, color)
 
+
+    def _assign_id(self):
+        """
+        Assigns an ID to each object by computing the Euclidean distance of each object centroid to every other object centroid in the scene
+        Returns:
+
+        """
+        distances = []
+        dist_ids = []
+        # Compute Euclidean distance for each pair of centroids
+        for i in range(len(self.centers)):
+            for j in range(len(self.centers)):
+                if j != i:
+                    distances.append(ut.compute_euclidean(self.centers[i], self.centers[j]))
+            dist_ids.append((self.centers[i], distances))
+            distances = []
+        return dist_ids
 
     def detect(self, image, blob_size=(320, 320)):
 
@@ -151,7 +169,7 @@ class Detector:
         # Draw boxes
         self._draw_boxes()
 
-        return self.image
+        return self.image, self._assign_id()
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
@@ -191,8 +209,8 @@ class HomingUI(ut.UI):
 labels_path = '../../datasets/models/coco.names'
 labels_stream = open(labels_path).read().strip().split("\n")
 
-config_path = '../../datasets/models/yolov3/yolov3-tiny.cfg'
-weights_path = '../../datasets/models/yolov3/yolov3-tiny.weights'
+config_path = '../../datasets/models/yolov3/yolov3-320.cfg'
+weights_path = '../../datasets/models/yolov3/yolov3-320.weights'
 
 det = Detector(config_path, weights_path, labels_stream)
 ui = HomingUI()
@@ -208,10 +226,13 @@ while True:
 
     # Perform object detection
 
+    image, dists = det.detect(frame, blob_size=(320, 320))
+    if dists:
+        print(dists)
 
     # Perform detection and display result
     try:
-        cv.imshow('Camera', det.detect(frame, blob_size=(320, 320)))
+        cv.imshow('Camera', image)
         ui.mouse_select()
     except cv.error:
         cv.destroyAllWindows()
