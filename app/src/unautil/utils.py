@@ -1,7 +1,7 @@
-import os
 import cv2 as cv
+import numpy as np
 
-# -------------------------------------------------- Misc Methods -------------------------------------------------------------- #
+# -------------------------------------------------- Util Methods -------------------------------------------------------------- #
 
 def wait_for_esc():
     while True:
@@ -35,6 +35,9 @@ def draw_image(img, x, y, radius=10, color=(0, 0, 255)):
 def snap_image(img, top_x, top_y, dim):
     return img[top_y:top_y + dim, top_x:top_x + dim]
 
+
+def compute_euclidean(centroid1, centroid2):
+    return np.sqrt(np.square(centroid1[0] - centroid2[0]) + np.square(centroid1[1] - centroid2[1]))
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
