@@ -1,7 +1,5 @@
 import cv2 as cv
 import numpy as np
-import os
-import imutils
 import time
 import app.src.unautil.utils as ut
 
@@ -44,7 +42,7 @@ class Detector:
             return cv.dnn.readNetFromDarknet(self.config, self.weights)
 
 
-    def _extract_output_data(self, layer_outputs, image):
+    def _extract_output_data(self, layer_outputs, img):
         """Takes in network output data and processes it into useful data that will be used
         for bounding boxes, confidences and class IDs
 
@@ -60,7 +58,7 @@ class Detector:
         self.class_ids = []
         self.centers = []
 
-        img_height, img_width = image.shape[:2]
+        img_height, img_width = img.shape[:2]
 
         # Loop over each of the layer outputs
         for output in layer_outputs:
@@ -94,11 +92,9 @@ class Detector:
 
     def _draw_boxes(self):
         """
-
+        Filters out overlapping bounding boxes and draws the rest of them on the image
         Args:
-            boxes: List of top left and bottom right coordinates for bounding boxes (top_x, top_y , bot_x, bot_y)
-            confidences: List of probabilities of possible class for sensed object
-            class_ids: List of class IDs for most probable classes
+
 
         Returns:
 
@@ -142,18 +138,18 @@ class Detector:
             distances = []
         return dist_ids
 
-    def detect(self, image, blob_size=(320, 320)):
+    def detect(self, img, blob_size=(320, 320)):
 
         """
 
         Args:
-            image: Image in which object detection will perform on
+            img: Image in which object detection will perform on
             blob_size: Shape of blob used in dnn.blobFromImage
         Returns:
 
         """
         # Initialize image
-        self.image = image
+        self.image = img
 
         # Construct a blob from the input image and then perform a forward
         # pass of the YOLO object detector, giving us our bounding boxes and
@@ -177,8 +173,8 @@ class Detector:
 
 class Guide:
 
-    def course_correct(self):
-        print('Course correct')
+    def __init__(self):
+        print('Guide')
 
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
@@ -226,7 +222,7 @@ while True:
 
     # Perform object detection
 
-    image, dists = det.detect(frame, blob_size=(320, 320))
+    image, dists = det.detect(frame, blob_size=(190, 190))
     if dists:
         print(dists)
 
@@ -246,16 +242,3 @@ print(det.image.shape)
 
 cap.release()
 cv.destroyAllWindows()
-
-
-
-
-
-
-
-
-
-
-
-
-
