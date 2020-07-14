@@ -32,8 +32,12 @@ def draw_image(img, x, y, radius=10, color=(0, 0, 255)):
     return img
 
 
-def snap_image(img, top_x, top_y, dim):
-    return img[top_y:top_y + dim, top_x:top_x + dim]
+def snap_image(img, top_x, top_y, dim=0, width=0, height=0):
+    if dim:
+        return img[top_y:top_y + dim, top_x:top_x + dim]
+    elif width and height:
+        return img[top_y:top_y + height, top_x:top_x + width].copy()
+
 
 
 def compute_euclidean(centroid1, centroid2):

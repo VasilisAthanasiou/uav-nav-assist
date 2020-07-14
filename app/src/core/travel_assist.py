@@ -307,7 +307,7 @@ class Simulator:
         capt_top_left = (actual_capture_coord[0] - int(capture_dim / 2),  # Top left pixel location of captured image
                          actual_capture_coord[1] - int(capture_dim / 2))
         # Cropping the UAV image
-        captured_img = ut.snap_image(sim_uav_image, capt_top_left[0], capt_top_left[1], capture_dim)
+        captured_img = ut.snap_image(sim_uav_image, capt_top_left[0], capt_top_left[1], dim=capture_dim)
 
         # Displaying the actual UAV location on the satellite image
         marked_loc_img = ut.draw_image(sat_image, actual_capture_coord[0], actual_capture_coord[1], color=(255, 0, 0))
@@ -479,7 +479,7 @@ class TravelUI(ut.UI):
         src_dir += '/' + input('Specify the source directory\n{}\n'.format(os.listdir(src_dir)))
         tmp_dir += input('Select a template directory\n{}\n'.format(os.listdir(tmp_dir)))
         act_txt_path = tmp_dir + '/' + [file if '.txt' in file else None for file in os.listdir(tmp_dir)][0]
-        tmp_dir += '/zoomed-images/'
+        tmp_dir += '/images/'
         rot = int(input('Enter the template rotation\n'))
 
         self.evaluator = Evaluator(src_dir, tmp_dir, act_txt_path, rotation=rot)
@@ -492,7 +492,7 @@ class TravelUI(ut.UI):
 
 # ----------------------------------------------------------- Main ----------------------------------------------------------------------- #
 ui = TravelUI()
-ui.experiment('write text')  # Either 'simulation', 'plot' or 'write text'
+ui.experiment('simulation')  # Either 'simulation', 'plot' or 'write text'
 
 # sim = Simulator()
 # sim.simulate('../datasets/travel-assist/sources/source-diverse/1.source',
