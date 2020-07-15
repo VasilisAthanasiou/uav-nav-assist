@@ -13,15 +13,39 @@ class Targets:
         self.centroids = []
 
     def return_index(self, target_id):
+        """
+        Uses the target id to return the corresponding index on all the Targets fields
+        Args:
+            target_id: Unique object ID
+
+        Returns:
+
+        """
         return self.targets_ids.index(target_id)
 
     def insert_target(self, target_id, category, image, centroid):
+        """
+
+        Args:
+            target_id: Unique object ID
+            category: Class of object, derived from classification
+            image: First sensed image of the new target
+            centroid: Location of the center of the object inside the scene
+
+        Returns:
+
+        """
         self.targets_ids.append(target_id)
         self.categories.append(category)
         self.images.append([image])
         self.centroids.append(centroid)
 
     def pop_target(self):
+        """
+
+        Returns:
+
+        """
         self.targets_ids.pop(0)
         self.categories.pop(0)
         self.images.pop(0)
@@ -40,11 +64,15 @@ class Targets:
         max_val = 0
         for target_id in self.targets_ids:
             for img in self.images[self.return_index(target_id)]:
+
                 try:
                     img = imutils.resize(img, template.shape[0], template.shape[1])
-                    template = imutils.resize(template, img.shape[0], img.shape[1])
-                    res = cv.matchTemplate(img, template, cv.TM_CCOEFF_NORMED)
-                    min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
+
+                    if img.shape == template.shape:
+                        res = cv.matchTemplate(img, template, cv.TM_CCOEFF_NORMED)
+                        min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
+                    else:
+                        print(img.shape, template.shape)
                 except (cv.error, ZeroDivisionError) as e:
                     print(e)
 
