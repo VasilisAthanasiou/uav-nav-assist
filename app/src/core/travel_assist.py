@@ -97,7 +97,7 @@ class Matcher:
         max_vals = []
 
         # Perform template matching on different sizes of the template image to find the highest correlation value
-        while max_val < 0.5:
+        while max_val < 0.45:
             image = imutils.resize(self.temp, int(self.temp.shape[0] * resize_value), int(image.shape[1] * resize_value))
             res = cv.matchTemplate(self.src, image, cv.TM_CCOEFF_NORMED)
             min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
@@ -312,7 +312,6 @@ class Simulator:
         # Displaying the actual UAV location on the satellite image
         marked_loc_img = ut.draw_image(sat_image, actual_capture_coord[0], actual_capture_coord[1], color=(255, 0, 0))
         cv.imshow('Actual UAV location', marked_loc_img)
-        cv.imshow('Captured image', captured_img)
         ut.wait_for_esc()
 
         # Rotate the image clockwise to simulate the insertion angle plus the INS error
