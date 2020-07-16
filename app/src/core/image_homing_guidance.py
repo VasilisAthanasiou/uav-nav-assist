@@ -143,8 +143,8 @@ class Detector:
         self.class_ids = []
         self.centers = []
 
-        self.targets = Targets(5)
-        self.candidate_target = Target(max_images=40)
+        self.targets = Targets(10)
+        self.candidate_target = Target(max_images=120)
         self.tid = 0
         self.prev_centroid = (0, 0)
         self.prev_tid = 0

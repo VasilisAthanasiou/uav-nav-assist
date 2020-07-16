@@ -205,7 +205,7 @@ class Evaluator:
         self.result_txt = ''
 
     def evaluate(self, method):
-        if method == 'write text':
+        if method == 'write-text':
             return self._write_experiment()
         elif method == 'plot':
             return self._plot_data()
@@ -215,6 +215,7 @@ class Evaluator:
         n_templates = len(self.temp)
         print(n_templates)
         counter = 0  # Keeps track of each iterations
+        img_counter = 1
         prc = Processor()
         matcher = Matcher()
 
@@ -232,14 +233,13 @@ class Evaluator:
                 # Error for one template is the added absolute differences between x and y divided the number of pixels
                 error_temp_img += np.abs(int(sensed_x) - int(actual_x)) + np.abs(int(sensed_y) - int(actual_y))
 
-                self.result_txt += 'Error for template {} : {}\nTemplate max value : {:.2f}\n'.format(self.temp[counter].shape, np.abs(
-                    int(sensed_x) - int(actual_x)) + np.abs(int(sensed_y) - int(actual_y)), value) + '\n'
+                # self.result_txt += 'Error for template {} : {}\nTemplate max value : {:.2f}\n'.format(self.temp[counter].shape, np.abs(
+                #     int(sensed_x) - int(actual_x)) + np.abs(int(sensed_y) - int(actual_y)), value) + '\n'
                 counter += 1
 
-
             self.img_error.append(error_temp_img / n_templates)  # Error for a whole image tested with multiple templates
-            self.result_txt += ("Mean error for image {} : {}px\n".format(int(counter / n_templates),
-                                                                          error_temp_img / n_templates))
+            self.result_txt += ("Mean error for image {} : {}px\n".format(img_counter, error_temp_img / n_templates))
+            img_counter += 1
         # Error for all images
         self.error = sum(self.img_error) / len(self.src)
         self.result_txt += ("There is {} pixel mean error.\n\n".format(self.error))
@@ -247,9 +247,9 @@ class Evaluator:
     def _write_experiment(self):
         # Write the experiment results on a text file
         self._run_evaluation()
-        file = open("../datasets/experiment-results.txt", "a")
+        file = open("app/datasets/experiment-results.txt", "a")
         file.write(
-            "-------------- Results using {}deg rotation on source images on dataset --------------\n{}".format(self.rotation,
+            "------------------------------ Results using {}deg rotation -------------------------------------\n{}".format(self.rotation,
                                                                                                                 self.result_txt))
 
     def _plot_data(self):
@@ -313,7 +313,7 @@ class Simulator:
 
         # Displaying the actual UAV location on the satellite image
         marked_loc_img = ut.draw_image(sat_image, actual_capture_coord[0], actual_capture_coord[1], color=(255, 0, 0))
-        cv.imshow('Actual UAV location', imutils.resize(marked_loc_img, 500, 500))
+        cv.imshow('Actual UAV location', imutils.resize(marked_loc_img, 800, 800))
         ut.wait_for_esc()
 
         # Rotate the image clockwise to simulate the insertion angle plus the INS error
@@ -339,7 +339,7 @@ class Simulator:
 
         # Diplay both the actual and the calculated UAV position on the image
         marked_loc_img = ut.draw_image(marked_loc_img, captured_img_center[0], captured_img_center[1])
-        cv.imshow('Actual location (Blue) vs Calculated location (Red)', imutils.resize(marked_loc_img, 500, 500))
+        cv.imshow('Actual location (Blue) vs Calculated location (Red)', imutils.resize(marked_loc_img, 800, 800))
         ut.wait_for_esc()
 
         # Course correction data
@@ -487,16 +487,5 @@ class TravelUI(ut.UI):
 
         return self.evaluator.evaluate(self._method)
 
-
-# ---------------------------------------------------------------------------------------------------------------------------------------- #
-
-
-# ----------------------------------------------------------- Main ----------------------------------------------------------------------- #
-# ui = TravelUI()
-# ui.experiment('simulation')  # Either 'simulation', 'plot' or 'write text'
-
-sim = Simulator()
-sim.simulate('../datasets/travel-assist/sources/source-diverse/3.cloudy-images',
-             '../datasets/travel-assist/sources/source-diverse/2.blurred', True)
 
 # ---------------------------------------------------------------------------------------------------------------------------------------- #

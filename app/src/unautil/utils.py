@@ -52,13 +52,13 @@ class UI:
 
     def __init__(self, method=''):
         self._method = method
-        self.cwd = '../datasets'
+        self.cwd = 'app/datasets'
 
     def experiment(self, method):
         """
 
         Args:
-            method: Selects the method to run. Can be = 'simulation', 'plot', 'write text'
+            method: Selects the method to run. Can be = 'simulation', 'plot', 'write-text'
         """
         self._method = method
         return self._get_method()
@@ -68,7 +68,7 @@ class UI:
         if self._method == 'simulation':
             self.cwd += '/travel-assist'
             return self._use_simulation()
-        elif (self._method == 'plot') or (self._method == 'write text'):
+        elif (self._method == 'plot') or (self._method == 'write-text'):
             self.cwd += '/travel-assist'
             return self._use_evaluation()
         elif self._method == 'guide':
