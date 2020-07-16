@@ -12,7 +12,6 @@ import app.src.unautil.utils as ut
 def _grayscale(img):
     # Convert to grayscale
     try:
-
         return cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     except cv.error:
         # The image was probably already converted to grayscale
@@ -60,11 +59,15 @@ class Matcher:
 
     # Returns the top left pixel location of the sensed template
     def findTarget(self, src, temp, method):
-        """Uses openCV's matchTemplate to find a desired target inside the source image.
+        """
+        Uses openCV's matchTemplate to find a desired target inside the source image.
+        Args:
+            src: Source image
+            temp: Template image
+            method: Method to use for matching. Options are : 'template-matching
 
-        :param src: Source image
-        :param temp: Template image
-        :return: Tuple containing the sensed target top left coordinates
+        Returns:
+
         """
         self.src = src
         self.temp = temp
@@ -82,7 +85,6 @@ class Matcher:
     def _template_matching(self):
         # Apply template matching
         start_time = time.time()
-        max_val = 0
         prev_max = 0
         # This coefficient prevents the algorithm from getting stuck in a loop
         cycle_prevent_coeff = 0.016
@@ -97,7 +99,7 @@ class Matcher:
         max_vals = []
 
         # Perform template matching on different sizes of the template image to find the highest correlation value
-        while max_val < 0.45:
+        while max_val < 0.42:
             image = imutils.resize(self.temp, int(self.temp.shape[0] * resize_value), int(image.shape[1] * resize_value))
             res = cv.matchTemplate(self.src, image, cv.TM_CCOEFF_NORMED)
             min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
@@ -105,17 +107,17 @@ class Matcher:
             max_vals.append((max_val, image.shape))
 
             if zoom_out:
-                resize_value -= 0.1
+                resize_value -= 0.1 # Zoom out value
             else:
-                resize_value += 0.1
+                resize_value += 0.1 # Zoom in value
 
-            if prev_max > max_val + cycle_prevent_coeff:
+            if prev_max > max_val + cycle_prevent_coeff:  # If the previous correlation is higher that the current, then change zoom
                 # Zoom the image in
                 resize_value = 1.1
                 image = self.temp
                 zoom_out = False
             prev_max = max_val
-            if time.time() - start_time > 1.0:
+            if time.time() - start_time > 1.0:  # If this processes lasts for more that 1 sec then end the process
                 _, (width, height) = max(max_vals, key=lambda value: value[0])
                 image = imutils.resize(self.temp, width, height)
                 res = cv.matchTemplate(self.src, image, cv.TM_CCOEFF_NORMED)
@@ -277,7 +279,7 @@ class Simulator:
     def __init__(self, sat_images=None, sim_uav_images=None):
         self.sat_images = sat_images
         self.sim_uav_images = sim_uav_images
-        self.params = 100, 'East', 'South', 45, 200
+        self.params = 100, 'East', 'North', 45, 200
         self.dx = 0
         self.dy = 0
 
@@ -311,7 +313,7 @@ class Simulator:
 
         # Displaying the actual UAV location on the satellite image
         marked_loc_img = ut.draw_image(sat_image, actual_capture_coord[0], actual_capture_coord[1], color=(255, 0, 0))
-        cv.imshow('Actual UAV location', marked_loc_img)
+        cv.imshow('Actual UAV location', imutils.resize(marked_loc_img, 500, 500))
         ut.wait_for_esc()
 
         # Rotate the image clockwise to simulate the insertion angle plus the INS error
@@ -337,7 +339,7 @@ class Simulator:
 
         # Diplay both the actual and the calculated UAV position on the image
         marked_loc_img = ut.draw_image(marked_loc_img, captured_img_center[0], captured_img_center[1])
-        cv.imshow('Actual location (Blue) vs Calculated location (Red)', marked_loc_img)
+        cv.imshow('Actual location (Blue) vs Calculated location (Red)', imutils.resize(marked_loc_img, 500, 500))
         ut.wait_for_esc()
 
         # Course correction data
@@ -490,11 +492,11 @@ class TravelUI(ut.UI):
 
 
 # ----------------------------------------------------------- Main ----------------------------------------------------------------------- #
-ui = TravelUI()
-ui.experiment('simulation')  # Either 'simulation', 'plot' or 'write text'
+# ui = TravelUI()
+# ui.experiment('simulation')  # Either 'simulation', 'plot' or 'write text'
 
-# sim = Simulator()
-# sim.simulate('../datasets/travel-assist/sources/source-diverse/1.source',
-#              '../datasets/travel-assist/sources/source-diverse/3.cloudy-images', True, 10)
+sim = Simulator()
+sim.simulate('../datasets/travel-assist/sources/source-diverse/3.cloudy-images',
+             '../datasets/travel-assist/sources/source-diverse/2.blurred', True)
 
 # ---------------------------------------------------------------------------------------------------------------------------------------- #
