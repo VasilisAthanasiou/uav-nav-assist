@@ -2,15 +2,15 @@ import cv2 as cv
 import numpy as np
 import time
 import app.src.unautil.utils as ut
-import imutils
+
+# TODO: Make target identification work for multiple objects at the same time.
+# TODO: Maybe you should create a Identification class
 
 # --------------------------------------- Image Detection ---------------------------------------------------------------------- #
 class Targets:
-    def __init__(self):
-        self.targets_ids = []
-        self.categories = []
-        self.images = []
-        self.centroids = []
+    def __init__(self, max_objects):
+        self.target_list = []
+        self.max_objects = max_objects
 
     def return_index(self, target_id):
         """
@@ -18,39 +18,31 @@ class Targets:
         Args:
             target_id: Unique object ID
 
-        Returns:
+        Returns: Index of object with ID = target_id
 
         """
-        return self.targets_ids.index(target_id)
+        return [target.target_id for target in self.target_list].index(target_id)
 
-    def insert_target(self, target_id, category, image, centroid):
+    def insert_target(self, target, target_id):
         """
-
         Args:
+            target: Uninitialized Target object
             target_id: Unique object ID
             category: Class of object, derived from classification
-            image: First sensed image of the new target
-            centroid: Location of the center of the object inside the scene
-
-        Returns:
-
         """
-        self.targets_ids.append(target_id)
-        self.categories.append(category)
-        self.images.append([image])
-        self.centroids.append(centroid)
+        if len(self.target_list) >= self.max_objects:
+            self.pop_target()
+            target.initialize_target(target_id)
+            self.target_list.append(target)
+            return
+        target.initialize_target(target_id)
+        self.target_list.append(target)
 
     def pop_target(self):
         """
-
-        Returns:
-
+        Removes a target from the target_list
         """
-        self.targets_ids.pop(0)
-        self.categories.pop(0)
-        self.images.pop(0)
-        self.centroids.pop(0)
-
+        self.target_list.pop()
 
     def _TM_VER_ID(self, template):
         """
@@ -62,12 +54,11 @@ class Targets:
 
         """
         max_val = 0
-        for target_id in self.targets_ids:
-            for img in self.images[self.return_index(target_id)]:
-
+        t_width, t_height, _ = template.shape
+        for target_id in [target.target_id for target in self.target_list]:
+            for img in self.target_list[self.return_index(target_id)].images:
                 try:
-                    img = imutils.resize(img, template.shape[0], template.shape[1])
-
+                    img = cv.resize(img, (t_height, t_width))
                     if img.shape == template.shape:
                         res = cv.matchTemplate(img, template, cv.TM_CCOEFF_NORMED)
                         min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
@@ -82,16 +73,7 @@ class Targets:
 
     def _TM_UPDATE_KB(self, target_id, template, center):
         target_index = self.return_index(target_id)
-
-        if len(self.images[target_index]) > 20:
-            self.images[target_index].pop(0)
-            self.images[target_index].append(template)
-            self.centroids[target_index] = center
-            return
-
-        print('Added image')
-        self.images[target_index].append(template)
-        self.centroids[target_index] = center
+        self.target_list[target_index].update_data(template, center)
 
     def _use_template_matching(self, method, template=None, target_id=None, center=None):
         if method == 'update knowledge base':
@@ -99,13 +81,38 @@ class Targets:
         if method == 'verify id':
             return self._TM_VER_ID(template)
 
-    def verify_id(self, template, method):
+    def verify_id(self, template, method):  # TODO: Fix this to work for Target object instead of template(image)
         if method == 'template matching':
             return self._use_template_matching('verify id', template)
 
     def update_knowledge_base(self, target_id, template, center, method):
         if method == 'template matching':
             return self._use_template_matching('update knowledge base', template, target_id, center)
+
+
+class Target:
+    def __init__(self, target_id=-1, max_images=120, category=None):
+        self.target_id = target_id
+        self.centroid = None
+        self.category = category
+        self.images = []
+        self.max_images = max_images
+
+    def initialize_target(self, target_id, category=None):
+        self.target_id = target_id
+        if category:
+            self.category = category
+
+    def update_data(self, img, centroid):
+        self.centroid = centroid
+        if len(self.images) >= self.max_images:
+            self.images.pop()
+            self.images.append(img)
+            return
+        self.images.append(img)
+
+    def reset_target(self, max_images):
+        self.__init__(max_images=max_images)
 
 
 class Detector:
@@ -136,19 +143,17 @@ class Detector:
         self.class_ids = []
         self.centers = []
 
-
-        self.targets = Targets()
+        self.targets = Targets(5)
+        self.candidate_target = Target(max_images=40)
         self.tid = 0
         self.prev_centroid = (0, 0)
         self.prev_tid = 0
 
         self.start_time = time.time()
 
-
     def _init_network(self, model=None):
         if '.cfg' in self.config and '.weights' in self.weights:
             return cv.dnn.readNetFromDarknet(self.config, self.weights)
-
 
     def _extract_output_data(self, layer_outputs, img):
         """Takes in network output data and processes it into useful data that will be used
@@ -180,7 +185,6 @@ class Detector:
 
                 # Filter out weak predictions by ensuring the detected probability is greater than the minimum probability
                 if confidence > 0.5:
-
                     # Scale the bounding box coordinates back relative to the size of the image, keeping in mind that YOLO
                     # actually returns the center (x, y)-coordinates of the bounding box followed by the boxes' width and height
 
@@ -198,7 +202,6 @@ class Detector:
                     self.class_ids.append(class_id)
                     self.centers.append((center_x, center_y))
 
-
     def _draw_boxes(self):
         """
         Filters out overlapping bounding boxes and draws the rest of them on the image
@@ -212,6 +215,7 @@ class Detector:
         indices = cv.dnn.NMSBoxes(self.boxes, self.confidences, 0.5, 0.2)
         centers_unsuppressed = self.centers.copy()
         self.centers = []
+
         # Ensure at least one detection exists
         if len(indices) > 0:
 
@@ -223,10 +227,10 @@ class Detector:
                 self.centers.append(centers_unsuppressed[i])
 
                 # Assign an ID to the target using template matching on a list of target images
-
                 tID = self._assign_id(i, self._capture_target(i), centers_unsuppressed[i])
                 print(tID, self.labels[self.class_ids[i]])
 
+                # Update the centroid
                 self.prev_centroid = centers_unsuppressed[i]
 
                 # Draw a bounding box rectangle and label on the image
@@ -236,46 +240,76 @@ class Detector:
                 cv.putText(self.image, text, (x, y - 5), cv.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
                 ut.draw_image(self.image, centers_unsuppressed[i][0], centers_unsuppressed[i][1], 5, color)
 
-
     def _capture_target(self, i):
-        # print(self.boxes[i])
+        """
+        Capture an image of a detected object
+        Args:
+            i: Index
+
+        Returns: Cropped image
+        """
         target_image = ut.snap_image(self.image, self.boxes[i][0], self.boxes[i][1], width=self.boxes[i][2], height=self.boxes[i][3])
         # cv.imshow('Target', target_image)
         return target_image
 
     def _are_same_class(self, i, tid):
-        return self.labels[self.class_ids[i]] == self.targets.categories[self.targets.return_index(tid)]
+        """
+        Check if one detected object is the same class as a given target
+        Args:
+            i: Current object index
+            tid: Target ID. Is used with Targets.return_index() to return the index of a given target
+
+        Returns: Boolean
+        """
+        return self.labels[self.class_ids[i]] == [target.category for target in self.targets.target_list][self.targets.return_index(tid)]
 
     def _assign_id(self, i, img, center):
         """
         Does something wrong
-        Returns:
+        Returns: ID
 
         """
+        # Check if the candidate target is initialized
+        if self.candidate_target.target_id == -1:
+            self.candidate_target.initialize_target(self.tid, self.labels[self.class_ids[i]])
 
-        if not self.targets.targets_ids:
-            self.targets.insert_target(self.tid, self.labels[self.class_ids[i]], img, center)
-            return 0
-        elif np.abs(center[0] - self.prev_centroid[0]) < 50 and np.abs(center[1] - self.prev_centroid[1]) < 50 and self._are_same_class(i, self.prev_tid):
-            self.targets.update_knowledge_base(self.prev_tid, img, center, method='template matching')
-            return self.prev_tid
+        # Before identifying targets, make sure there is adequate date on the target
+        if len(self.candidate_target.images) >= self.candidate_target.max_images:
+            print('Initialized object')
+
+            if not self.targets.target_list:
+                self.targets.insert_target(self.candidate_target, 0)
+                return 0
+            elif np.abs(center[0] - self.prev_centroid[0]) < 50 and np.abs(center[1] - self.prev_centroid[1]) < 50 and self._are_same_class(
+                    i, self.prev_tid):
+                self.targets.update_knowledge_base(self.prev_tid, img, center, method='template matching')
+                return self.prev_tid
+            else:
+                # Check if this is a new object
+                matched, matched_id = self.targets.verify_id(img, method='template matching')  # TODO: FIX THIS TO WORK FOR ALL IMAGES IN TARGET OBJECTS
+                print(matched_id)
+                if matched and self._are_same_class(i, matched_id):
+                    print('Matched')
+                    self.targets.update_knowledge_base(matched_id, img, center, method='template matching')
+                    self.prev_tid = matched_id
+                    return matched_id
+
+            self.tid += 1
+            self.targets.insert_target(self.candidate_target, self.tid)
+            self.candidate_target.reset_target(40)
+            self.candidate_target.update_data(img, center)
+            self.prev_centroid = center
+            self.prev_tid += 1
+            return self.tid
         else:
-            matched, matched_id = self.targets.verify_id(img, method='template matching')
-            print(matched_id)
-            if matched and self._are_same_class(i, matched_id):
-                print('Matched')
-                self.targets.update_knowledge_base(matched_id, img, center, method='template matching')
-                self.prev_tid = matched_id
-                return matched_id
+            if np.abs(center[0] - self.prev_centroid[0]) < 100 and np.abs(center[1] - self.prev_centroid[1]) < 100 and self.labels[self.class_ids[i]] == self.candidate_target.category:
+                self.candidate_target.update_data(img, center)
+            else:
+                self.candidate_target.reset_target(40)
+                self.candidate_target.update_data(img, center)
+            self.prev_centroid = center
 
-        self.tid += 1
-        self.targets.insert_target(self.tid, self.labels[self.class_ids[i]], img, center)
-        if len(self.targets.targets_ids) > 5:
-            self.targets.pop_target()
-        self.prev_centroid = center
-        self.prev_tid += 1
-        return self.tid
-
+        return self.candidate_target.target_id
 
     def detect(self, img, blob_size=(320, 320)):
 
@@ -305,6 +339,7 @@ class Detector:
         self._draw_boxes()
 
         return self.image
+
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
@@ -356,24 +391,19 @@ cap = cv.VideoCapture(0)
 while True:
 
     # Capture frame by frame
-    _, frame = cap.read()
+    ret, frame = cap.read()
     # Perform image processing
 
     # Perform object detection
-    det_frame = det.detect(frame, blob_size=(214, 214))
+    det_frame = det.detect(frame, blob_size=(320, 320))
 
     # Display result
-    try:
+    if ret:
         cv.imshow('Camera', det_frame)
-        ui.mouse_select()
-    except cv.error:
-        cv.destroyAllWindows()
-
 
     # Wait for ESC
-    if cv.waitKey(1) == 27:
+    if cv.waitKey(1) & 0XFF == 27:
         break
-
 
 cap.release()
 cv.destroyAllWindows()
