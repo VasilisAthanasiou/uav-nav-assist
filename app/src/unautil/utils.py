@@ -1,7 +1,16 @@
 import cv2 as cv
 import numpy as np
 
+
 # -------------------------------------------------- Util Methods -------------------------------------------------------------- #
+def process_image(image, args=[None], resize=0.0):
+    if 'grayscale' in args:
+        image = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+    if resize:
+        image = cv.resize(image, (round(image.shape[1] * resize), round(image.shape[0] * resize)))
+
+    return image
+
 
 def wait_for_esc():
     while True:

@@ -18,8 +18,6 @@ Y
 :
 
 .gitignore,a/5/a5cc2925ca8258af241be7e5b0381edf30266302
-U
-%app/src/core/image_homing_guidance.py,a/3/a3f053432874aa8d4b897b96fbcbfb492ce6050b
 N
 app/datasets/models/coco.names,2/4/246a3499af7c1e9a6339d0cef8a65a7ee84e4d67
 W

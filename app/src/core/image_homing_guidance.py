@@ -4,9 +4,10 @@ import time
 import app.src.unautil.utils as ut
 
 # TODO: Make target identification work for multiple objects at the same time.
-# TODO: Maybe you should create a Identification class
 
-# --------------------------------------- Image Detection ---------------------------------------------------------------------- #
+
+# -------------------------------------------------- Target Classes --------------------------------------------------------------- #
+
 class Targets:
     def __init__(self, max_objects):
         self.target_list = []
@@ -28,15 +29,15 @@ class Targets:
         Args:
             target: Uninitialized Target object
             target_id: Unique object ID
-            category: Class of object, derived from classification
         """
+        new_target = Target(target_id, target.max_images, target.category)
+        new_target.update_data(target.images, target.centroid)
+
         if len(self.target_list) >= self.max_objects:
             self.pop_target()
-            target.initialize_target(target_id)
-            self.target_list.append(target)
+            self.target_list.append(new_target)
             return
-        target.initialize_target(target_id)
-        self.target_list.append(target)
+        self.target_list.append(new_target)
 
     def pop_target(self):
         """
@@ -44,7 +45,7 @@ class Targets:
         """
         self.target_list.pop()
 
-    def _TM_VER_ID(self, template):
+    def _TM_VER_ID(self, template_target):
         """
         Use Template Matching to examine if the template is of a known object
         Args:
@@ -54,36 +55,47 @@ class Targets:
 
         """
         max_val = 0
-        t_width, t_height, _ = template.shape
-        for target_id in [target.target_id for target in self.target_list]:
-            for img in self.target_list[self.return_index(target_id)].images:
-                try:
-                    img = cv.resize(img, (t_height, t_width))
-                    if img.shape == template.shape:
-                        res = cv.matchTemplate(img, template, cv.TM_CCOEFF_NORMED)
-                        min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
-                    else:
-                        print(img.shape, template.shape)
-                except (cv.error, ZeroDivisionError) as e:
-                    print(e)
+        for target in self.target_list:
+            print('Number of targets {}'.format(len(self.target_list)))
+            if template_target.category == target.category:
+                print('Number of target images {}'.format(len(target.images)))
+                print('Number of template images {}'.format(len(template_target.images)))
+                for target_img in target.images:
+                    tar_width, tar_height, _ = target_img.shape
+                    for template in template_target.images:
 
-                if max_val > 0.5:
-                    return True, target_id
-        return False, 0
+                        try:
+                            template = cv.resize(template, (tar_height, tar_width))
+                            if target_img.shape == template.shape:
+                                start_time = time.time()
+                                # Perform template matching
+                                res = cv.matchTemplate(ut.process_image(target_img, resize=0.5), ut.process_image(template, resize=2), cv.TM_CCOEFF_NORMED)
+                                min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
+
+                                end_time = time.time()
+                                print('Template Matching took {:.2f}s with {} correlation'.format(end_time - start_time, max_val))
+                            else:
+                                print(target_img.shape, template.shape)
+                        except (cv.error, ZeroDivisionError) as e:
+                            print(e)
+
+                        if max_val > 0.5:
+                            return True, target.target_id
+        return False, -1
 
     def _TM_UPDATE_KB(self, target_id, template, center):
         target_index = self.return_index(target_id)
         self.target_list[target_index].update_data(template, center)
 
-    def _use_template_matching(self, method, template=None, target_id=None, center=None):
+    def _use_template_matching(self, method, template=None, target_id=None, center=None, target=None):
         if method == 'update knowledge base':
             return self._TM_UPDATE_KB(target_id, template, center)
         if method == 'verify id':
-            return self._TM_VER_ID(template)
+            return self._TM_VER_ID(target)
 
-    def verify_id(self, template, method):  # TODO: Fix this to work for Target object instead of template(image)
-        if method == 'template matching':
-            return self._use_template_matching('verify id', template)
+    def verify_id(self, target, method):
+        if method == 'template matching' and target:
+            return self._use_template_matching('verify id', target=target)
 
     def update_knowledge_base(self, target_id, template, center, method):
         if method == 'template matching':
@@ -105,6 +117,11 @@ class Target:
 
     def update_data(self, img, centroid):
         self.centroid = centroid
+        if type(img) is list:
+            for i in img:
+                self.images.append(i)
+                return
+
         if len(self.images) >= self.max_images:
             self.images.pop()
             self.images.append(img)
@@ -114,6 +131,80 @@ class Target:
     def reset_target(self, max_images):
         self.__init__(max_images=max_images)
 
+# ------------------------------------------------------------------------------------------------------------------------------ #
+
+# -------------------------------------------------- Identifier ---------------------------------------------------------------- #
+
+class Identifier:
+    def __init__(self, labels):
+        self.targets = Targets(5)
+        self.candidate_target = Target(max_images=20)
+        self.tid = 0
+        self.prev_centroid = (0, 0)
+        self.labels = labels
+
+    def _are_same_class(self, label_index, tid):
+        """
+        Check if one detected object is the same class as a given target
+        Args:
+            i: Current object index
+            tid: Target ID. Is used with Targets.return_index() to return the index of a given target
+
+        Returns: Boolean
+        """
+        return self.labels[label_index] == [target.category for target in self.targets.target_list][self.targets.return_index(tid)]
+
+    def assign_id(self, label_index, img, center):
+        """
+        Programming horror. Proceed with caution...
+        Returns: ID
+
+        """
+        # Check if the candidate target is initialized
+        if self.candidate_target.target_id == -1:
+            self.candidate_target.initialize_target(self.tid, self.labels[label_index])
+
+        same_loc_and_category = np.abs(center[0] - self.prev_centroid[0]) < 100 and np.abs(center[1] - self.prev_centroid[1]) < 100 and self.labels[label_index] == self.candidate_target.category
+
+        # Before identifying targets, make sure there is adequate data on the target
+        if len(self.candidate_target.images) >= self.candidate_target.max_images and not same_loc_and_category:
+
+            if not self.targets.target_list:
+                self.targets.insert_target(self.candidate_target, 0)
+                return 0
+            elif np.abs(center[0] - self.prev_centroid[0]) < 50 and np.abs(center[1] - self.prev_centroid[1]) < 50 and self._are_same_class(label_index, self.tid + 1):
+                self.targets.update_knowledge_base(self.tid - 1, img, center, method='template matching')
+                return self.tid - 1
+            else:
+                # Check if this is a new object
+                matched, matched_id = self.targets.verify_id(self.candidate_target, method='template matching')
+                print(matched_id)
+                if matched and self._are_same_class(label_index, matched_id):
+                    print('Matched')
+                    self.targets.update_knowledge_base(matched_id, img, center, method='template matching')
+                    return matched_id
+
+            print('Initialized object')
+            self.targets.insert_target(self.candidate_target, self.tid)
+            self.tid += 1
+            self.candidate_target.reset_target(20)
+            self.candidate_target.update_data(img, center)
+            self.prev_centroid = center
+            return self.tid
+        else:
+            print(self.candidate_target.category)
+            if same_loc_and_category:
+                self.candidate_target.update_data(img, center)
+            else:
+                self.candidate_target.reset_target(20)
+                self.candidate_target.update_data(img, center)
+            self.prev_centroid = center
+
+        return self.candidate_target.target_id
+
+# ------------------------------------------------------------------------------------------------------------------------------ #
+
+# -------------------------------------------------- Detector ------------------------------------------------------------------ #
 
 class Detector:
     def __init__(self, config, weights, labels, blob_size=(320, 320)):
@@ -124,6 +215,8 @@ class Detector:
             weights: Path for the network weights file
             labels: Path for the network labels file
         """
+
+        # ----------------------------------- Network fields ---------------------------------------------------- #
         self.config, self.weights = config, weights
         self.image = None
         self.labels = labels
@@ -142,14 +235,9 @@ class Detector:
         self.confidences = []
         self.class_ids = []
         self.centers = []
+        # ------------------------------------------------------------------------------------------------------- #
+        self.identifier = Identifier(self.labels)
 
-        self.targets = Targets(5)
-        self.candidate_target = Target(max_images=40)
-        self.tid = 0
-        self.prev_centroid = (0, 0)
-        self.prev_tid = 0
-
-        self.start_time = time.time()
 
     def _init_network(self, model=None):
         if '.cfg' in self.config and '.weights' in self.weights:
@@ -227,8 +315,8 @@ class Detector:
                 self.centers.append(centers_unsuppressed[i])
 
                 # Assign an ID to the target using template matching on a list of target images
-                tID = self._assign_id(i, self._capture_target(i), centers_unsuppressed[i])
-                print(tID, self.labels[self.class_ids[i]])
+                tID = self.identifier.assign_id(i, self._capture_target(i), centers_unsuppressed[i])
+                print('TID = {}, Class = {}'.format(tID, self.labels[self.class_ids[i]]))
 
                 # Update the centroid
                 self.prev_centroid = centers_unsuppressed[i]
@@ -252,64 +340,6 @@ class Detector:
         # cv.imshow('Target', target_image)
         return target_image
 
-    def _are_same_class(self, i, tid):
-        """
-        Check if one detected object is the same class as a given target
-        Args:
-            i: Current object index
-            tid: Target ID. Is used with Targets.return_index() to return the index of a given target
-
-        Returns: Boolean
-        """
-        return self.labels[self.class_ids[i]] == [target.category for target in self.targets.target_list][self.targets.return_index(tid)]
-
-    def _assign_id(self, i, img, center):
-        """
-        Does something wrong
-        Returns: ID
-
-        """
-        # Check if the candidate target is initialized
-        if self.candidate_target.target_id == -1:
-            self.candidate_target.initialize_target(self.tid, self.labels[self.class_ids[i]])
-
-        # Before identifying targets, make sure there is adequate date on the target
-        if len(self.candidate_target.images) >= self.candidate_target.max_images:
-            print('Initialized object')
-
-            if not self.targets.target_list:
-                self.targets.insert_target(self.candidate_target, 0)
-                return 0
-            elif np.abs(center[0] - self.prev_centroid[0]) < 50 and np.abs(center[1] - self.prev_centroid[1]) < 50 and self._are_same_class(
-                    i, self.prev_tid):
-                self.targets.update_knowledge_base(self.prev_tid, img, center, method='template matching')
-                return self.prev_tid
-            else:
-                # Check if this is a new object
-                matched, matched_id = self.targets.verify_id(img, method='template matching')  # TODO: FIX THIS TO WORK FOR ALL IMAGES IN TARGET OBJECTS
-                print(matched_id)
-                if matched and self._are_same_class(i, matched_id):
-                    print('Matched')
-                    self.targets.update_knowledge_base(matched_id, img, center, method='template matching')
-                    self.prev_tid = matched_id
-                    return matched_id
-
-            self.tid += 1
-            self.targets.insert_target(self.candidate_target, self.tid)
-            self.candidate_target.reset_target(40)
-            self.candidate_target.update_data(img, center)
-            self.prev_centroid = center
-            self.prev_tid += 1
-            return self.tid
-        else:
-            if np.abs(center[0] - self.prev_centroid[0]) < 100 and np.abs(center[1] - self.prev_centroid[1]) < 100 and self.labels[self.class_ids[i]] == self.candidate_target.category:
-                self.candidate_target.update_data(img, center)
-            else:
-                self.candidate_target.reset_target(40)
-                self.candidate_target.update_data(img, center)
-            self.prev_centroid = center
-
-        return self.candidate_target.target_id
 
     def detect(self, img, blob_size=(320, 320)):
 
@@ -400,6 +430,7 @@ while True:
     # Display result
     if ret:
         cv.imshow('Camera', det_frame)
+    # cv.waitKey(0)
 
     # Wait for ESC
     if cv.waitKey(1) & 0XFF == 27:

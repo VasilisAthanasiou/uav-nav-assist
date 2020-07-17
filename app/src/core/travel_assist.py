@@ -107,9 +107,9 @@ class Matcher:
             max_vals.append((max_val, image.shape))
 
             if zoom_out:
-                resize_value -= 0.1 # Zoom out value
+                resize_value -= 0.1  # Zoom out value
             else:
-                resize_value += 0.1 # Zoom in value
+                resize_value += 0.1  # Zoom in value
 
             if prev_max > max_val + cycle_prevent_coeff:  # If the previous correlation is higher that the current, then change zoom
                 # Zoom the image in
