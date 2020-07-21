@@ -1,17 +1,16 @@
 import cv2 as cv
 import numpy as np
-import matplotlib.pyplot as plt
 import app.src.unautil.utils as ut
 
 
 # -------------------------------------------------- Target Classes --------------------------------------------------------------- #
 
 class Target:
-    def __init__(self, bounding_box, image=None, target_id=0):
+    def __init__(self, bounding_box, centroid, image=None, target_id=0):
         self.target_id = target_id
         self.image = image
         self.bounding_box = bounding_box
-        self.centroid = None
+        self.centroid = centroid
 
     def update_data(self, bounding_box, centroid):
         self.bounding_box = bounding_box
@@ -33,16 +32,37 @@ class Identifier:
         self.tid = 0
 
     def _use_surf(self, image):
+        """
+        Use Speeded Up Robust Features
+        Args:
+            image: Image that SURF will be applied to.
+        Returns: Keypoints and descriptors
+        """
         surf = cv.xfeatures2d_SURF()
         surf.create(self.hessian_thresh)
         return surf.detect(image)
 
     def _use_orb(self, image):
+        """
+        Use Oriented FAST and Rotated BRIEF
+        Args:
+            image: Image that ORB will be applied to.
+        Returns: Keypoints and descriptors
+        """
         orb = cv.ORB_create(self.n_features)
         keypoints = orb.detect(image)
         return orb.compute(image, keypoints)
 
     def _extract_features(self, method, image):
+        """
+        Calls a method for feature extraction
+        Args:
+            method: Method that will be called
+            image: Image that the method will extract features from
+
+        Returns: Keypoints and Descriptors
+
+        """
         if method == 'SURF':  # Note that SURF in not free
             return self._use_surf(image)
         elif method == 'ORB':
@@ -51,6 +71,15 @@ class Identifier:
             print('No valid method selected')
 
     def _compare_features(self, target, uav_image, method):
+        """
+        Matches features from a pre-determined target with a UAV image
+        Args:
+            target: Target object
+            uav_image: Image from video feed
+            method: Method that will be used to extract features
+
+        Returns: Target keypoints, UAV keypoints and a match object that associates them
+        """
         target_keypoints, target_descriptors = self._extract_features(method, target.image)
         uav_keypoints, uav_descriptors = self._extract_features(method, uav_image)
         target_keyp_img = cv.drawKeypoints(target.image, target_keypoints, outImage=None)
@@ -64,25 +93,41 @@ class Identifier:
         matches = sorted(matches, key=lambda x: x.distance)
 
         result = cv.drawMatches(target_keyp_img, target_keypoints, uav_keyp_img, uav_keypoints, matches, uav_image, flags=2)
-        cv.imshow('Target keypoints', result)
+        # cv.imshow('Target keypoints', result)
         return target_keypoints, uav_keypoints, matches
 
     def set_target(self, target, boxes):
+        """
+        Sets a target up
+        Args:
+            target: Target object
+            boxes: Bounding boxes from detected objects
+        """
         self.target = target
         self.boxes = boxes
 
     def target_lock(self, uav_image, method):
+        """
+        Determines which of the current detections is the target
+        Args:
+            uav_image: Image from video feed
+            method: Method used to extract features
+
+        Returns: Index of target detection
+        """
         target_keypoints, uav_keypoints, matches = self._compare_features(self.target, uav_image, method)
         (tx, ty) = self.target.bounding_box[0], self.target.bounding_box[1]
         (tw, th) = self.target.bounding_box[2], self.target.bounding_box[3]
 
+        # Add that target keypoints into a list
         target_matches = []
         for match in matches:
-            tkeyp_x, tkeyp_y = target_keypoints[match.queryIdx].pt
-            if tx + tw >= int(tkeyp_x) >= tx and ty + th >= int(tkeyp_y) >= ty:
-                target_matches.append(uav_keypoints[match.trainIdx].pt)
+            tkeyp_x, tkeyp_y = target_keypoints[match.queryIdx].pt  # queryIdx is the index of a target keypoint that got matched
+            if tx + tw >= int(tkeyp_x) >= tx and ty + th >= int(tkeyp_y) >= ty:  # If the matched keypoint is within the target ROI
+                target_matches.append(uav_keypoints[match.trainIdx].pt)  # Append the corresponding UAV keypoint
 
         box_score = []
+        # Check which of the detection ROI's has the largest amount of keypoints associated with the target
         for i in range(len(self.boxes)):
             (bx, by) = self.boxes[i][0], self.boxes[i][1]
             (bw, bh) = self.boxes[i][2], self.boxes[i][3]
@@ -131,23 +176,24 @@ class Detector:
         self.class_ids = []
         self.centers = []
         # ------------------------------------------------------------------------------------------------------- #
-        self.target = Target([319, 182, 307, 244], image=cv.imread('../../datasets/testing/target.jpg'))
+        self.target = Target([319, 182, 307, 244], ((319+307)/2, (182+244)/2), image=cv.imread('../../datasets/testing/target.jpg'))
+        self.target_update_counter = 0
+        self.prev_index = -1
         self.identifier = Identifier(n_features=1000)
 
 
-    def _init_network(self, model=None):
+    def _init_network(self):
+        """
+        Initializes Neural Network pre-trained model
+        """
         if '.cfg' in self.config and '.weights' in self.weights:
             return cv.dnn.readNetFromDarknet(self.config, self.weights)
 
     def _extract_output_data(self, layer_outputs, img):
         """Takes in network output data and processes it into useful data that will be used
         for bounding boxes, confidences and class IDs
-
         Args:
             layer_outputs: Output data produced from net.forward()
-
-        Returns:
-
         """
         # Initialize lists of detected bounding boxes, confidences, and class IDs
         self.boxes = []
@@ -189,8 +235,6 @@ class Detector:
     def _draw_boxes(self):
         """
         Filters out overlapping bounding boxes and draws the rest of them on the image
-        Args:
-
         """
         # Apply non-maxima suppression to suppress weak, overlapping bounding boxes
         indices = cv.dnn.NMSBoxes(self.boxes, self.confidences, 0.5, 0.2)
@@ -201,6 +245,7 @@ class Detector:
 
         # Initialize target
         self.identifier.set_target(self.target, self.boxes)
+
         # Lock target
         if len(self.boxes) != 0:
             target_index = self.identifier.target_lock(res_image, 'ORB')
@@ -215,15 +260,20 @@ class Detector:
                 (w, h) = (self.boxes[i][2], self.boxes[i][3])
                 self.centers.append(centers_unsuppressed[i])
 
-                # Update the centroid
-                self.prev_centroid = centers_unsuppressed[i]
-
                 if i == target_index:
+                    tcenter_x, tcenter_y = centers_unsuppressed[i]
                     cv.rectangle(self.image, (x, y), (x + w, y + h), (0, 0, 255), 2)
                     text = "{} {:.4f}".format(self.labels[self.class_ids[i]], self.confidences[i])
                     cv.putText(self.image, text, (x, y - 5), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
                     ut.draw_image(self.image, centers_unsuppressed[i][0], centers_unsuppressed[i][1], 5, (0, 0, 255))
-
+                    self.target_update_counter += 1
+                    print('Target update expected in: {} frames'.format(10 - self.target_update_counter))
+                    if self.target_update_counter >= 10 and self.prev_index == i:
+                        print('Updated target image')
+                        self.target.image = self.image  # TODO: Make a function for this
+                        self.target.update_data(self.boxes[i], (tcenter_x, tcenter_y))
+                        self.target_update_counter = 0
+                    self.prev_index = i
                 else:
                     # Draw a bounding box rectangle and label on the image
                     cv.rectangle(self.image, (x, y), (x + w, y + h), (255, 255, 255), 2)
@@ -237,7 +287,6 @@ class Detector:
         Capture an image of a detected object
         Args:
             i: Index
-
         Returns: Cropped image
         """
         target_image = ut.snap_image(self.image, self.boxes[i][0], self.boxes[i][1], width=self.boxes[i][2], height=self.boxes[i][3])
@@ -246,13 +295,11 @@ class Detector:
 
 
     def detect(self, img, blob_size=(320, 320)):
-
         """
-
         Args:
             img: Image in which object detection will perform on
             blob_size: Shape of blob used in dnn.blobFromImage
-        Returns:
+        Returns: Drawn image
 
         """
         # Initialize image
@@ -334,19 +381,10 @@ while True:
     # Display result
     if ret:
         cv.imshow('Camera', det_frame)
-    # cv.waitKey(0)
 
     # Wait for ESC
     if cv.waitKey(1) & 0XFF == 27:
         break
-
-# ident = Identifier(300)
-# target = cv.imread('../../datasets/testing/target.jpg')
-# uav = cv.imread('../../datasets/testing/uav.jpg')
-#
-# ident.target_lock(target, uav, 'ORB')
-#
-#
 
 # cap.release()
 cv.destroyAllWindows()
