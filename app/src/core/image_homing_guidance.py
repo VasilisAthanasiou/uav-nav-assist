@@ -23,6 +23,7 @@ class Target:
 
 # -------------------------------------------------- Identifier ---------------------------------------------------------------- #
 
+
 class Identifier:
     def __init__(self, target=None, n_features=100, hessian_thresh=100):
         self.target = target
@@ -351,6 +352,18 @@ class HomingUI(ut.UI):
             mouse_loc = (self.mouse_x, self.mouse_y)
             print(mouse_loc)
 
+    def set_up_target(self, cap):
+        while True:
+            _, feed = cap.read()
+            cv.imshow('Target Selection', feed)
+            # Wait for ESC
+            if cv.waitKey(1) & 0XFF == 27:
+                cv.imwrite('../../datasets/testing/target.jpg', feed)
+                break
+
+
+
+
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
@@ -368,6 +381,8 @@ ui = HomingUI()
 
 # Load our input image and grab its spatial dimensions
 cap = cv.VideoCapture(0)
+
+ui.set_up_target(cap)
 
 while True:
 
