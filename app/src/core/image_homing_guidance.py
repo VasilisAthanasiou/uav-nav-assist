@@ -1,66 +1,20 @@
 import cv2 as cv
 import numpy as np
-import time
+import matplotlib.pyplot as plt
 import app.src.unautil.utils as ut
-
-# TODO: Make target identification work for multiple objects at the same time.
 
 
 # -------------------------------------------------- Target Classes --------------------------------------------------------------- #
 
-class Targets:
-    def __init__(self, max_objects):
-        self.target_list = []
-        self.max_objects = max_objects
-
-    def return_index(self, target_id):
-        """
-        Uses the target id to return the corresponding index on all the Targets fields
-        Args:
-            target_id: Unique object ID
-
-        Returns: Index of object with ID = target_id
-
-        """
-        return [target.target_id for target in self.target_list].index(target_id)
-
-    def insert_target(self, target, target_id):
-        """
-        Args:
-            target: Uninitialized Target object
-            target_id: Unique object ID
-        """
-        new_target = Target(target_id, target.max_images)
-        new_target.update_data(target.images, target.centroid)
-
-        if len(self.target_list) >= self.max_objects:
-            self.pop_target()
-            self.target_list.append(new_target)
-            return
-        self.target_list.append(new_target)
-
-    def pop_target(self):
-        """
-        Removes a target from the target_list
-        """
-        self.target_list.pop()
-
-    def verify_id(self, method):
-        print('verify id')
-
-
-
 class Target:
-    def __init__(self, target_id=-1, image=None):
+    def __init__(self, bounding_box, image=None, target_id=0):
         self.target_id = target_id
         self.image = image
+        self.bounding_box = bounding_box
         self.centroid = None
 
-    def initialize_target(self, target_id):
-        self.target_id = target_id
-
-    def update_data(self, centroid, image):
-        self.image = image
+    def update_data(self, bounding_box, centroid):
+        self.bounding_box = bounding_box
         self.centroid = centroid
 
     def reset_target(self):
@@ -71,8 +25,9 @@ class Target:
 # -------------------------------------------------- Identifier ---------------------------------------------------------------- #
 
 class Identifier:
-    def __init__(self, n_features=100, hessian_thresh=100):
-        self.candidate_target = Target()
+    def __init__(self, target=None, n_features=100, hessian_thresh=100):
+        self.target = target
+        self.boxes = None
         self.n_features = n_features
         self.hessian_thresh = hessian_thresh
         self.tid = 0
@@ -95,34 +50,61 @@ class Identifier:
         else:
             print('No valid method selected')
 
-    def _compare_features(self, target_image, uav_image, method):
-        target_keypoints, target_descriptors = self._extract_features(method, target_image)
+    def _compare_features(self, target, uav_image, method):
+        target_keypoints, target_descriptors = self._extract_features(method, target.image)
         uav_keypoints, uav_descriptors = self._extract_features(method, uav_image)
-        target_keyp_img = cv.drawKeypoints(target_image, target_keypoints, outImage=None)
+        target_keyp_img = cv.drawKeypoints(target.image, target_keypoints, outImage=None)
         uav_keyp_img = cv.drawKeypoints(uav_image, uav_keypoints, outImage=None)
-        cv.imshow('Target keypoints', target_keyp_img)
-        cv.imshow('UAV keypoints', uav_keyp_img)
+        bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
 
+        # Perform the matching between the ORB descriptors of the training image and the test image
+        matches = bf.match(target_descriptors, uav_descriptors)
 
-    def target_lock(self, target_image, uav_image, method):
-        self._compare_features(target_image, uav_image, method)
+        # The matches with shorter distance are the ones we want.
+        matches = sorted(matches, key=lambda x: x.distance)
 
-    def assign_id(self, image, centroid):
-        """
-        Programming horror. Proceed with caution...
-        Returns: ID
+        result = cv.drawMatches(target_keyp_img, target_keypoints, uav_keyp_img, uav_keypoints, matches, uav_image, flags=2)
+        cv.imshow('Target keypoints', result)
+        return target_keypoints, uav_keypoints, matches
 
-        """
-        print('Assign ID')
+    def set_target(self, target, boxes):
+        self.target = target
+        self.boxes = boxes
+
+    def target_lock(self, uav_image, method):
+        target_keypoints, uav_keypoints, matches = self._compare_features(self.target, uav_image, method)
+        (tx, ty) = self.target.bounding_box[0], self.target.bounding_box[1]
+        (tw, th) = self.target.bounding_box[2], self.target.bounding_box[3]
+
+        target_matches = []
+        for match in matches:
+            tkeyp_x, tkeyp_y = target_keypoints[match.queryIdx].pt
+            if tx + tw >= int(tkeyp_x) >= tx and ty + th >= int(tkeyp_y) >= ty:
+                target_matches.append(uav_keypoints[match.trainIdx].pt)
+
+        box_score = []
+        for i in range(len(self.boxes)):
+            (bx, by) = self.boxes[i][0], self.boxes[i][1]
+            (bw, bh) = self.boxes[i][2], self.boxes[i][3]
+            score = 0
+            for tmatch in target_matches:
+                if bx + bw >= int(tmatch[0]) >= bx and by + bh >= int(tmatch[1]) >= by:
+                    score += 1
+                    target_matches.remove(tmatch)
+            box_score.append(score)
+
+        if max(box_score) > 25 and len(self.boxes) > 1:
+            return box_score.index(max(box_score))
+        return -1
+
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
-# -------------------------------------------------- Detector ------------------------------------------------------------------ #
+# ------------------------------------------------------ Detector -------------------------------------------------------------- #
 
 class Detector:
     def __init__(self, config, weights, labels):
         """
-        THIS CLASS HAS TOO MANY FIELDS AND METHODS! SHOULD BE BROKEN INTO TWO DIFFERENT CLASSES!
         Args:
             config: Path for the network configuration file
             weights: Path for the network weights file
@@ -132,7 +114,6 @@ class Detector:
         # ----------------------------------- Network fields ---------------------------------------------------- #
         self.config, self.weights = config, weights
         self.image = None
-        self.prev_frame = None
         self.labels = labels
 
         # Create a list of colors that will be used for bounding boxes
@@ -150,8 +131,8 @@ class Detector:
         self.class_ids = []
         self.centers = []
         # ------------------------------------------------------------------------------------------------------- #
-
-        self.identifier = Identifier()
+        self.target = Target([319, 182, 307, 244], image=cv.imread('../../datasets/testing/target.jpg'))
+        self.identifier = Identifier(n_features=1000)
 
 
     def _init_network(self, model=None):
@@ -210,14 +191,19 @@ class Detector:
         Filters out overlapping bounding boxes and draws the rest of them on the image
         Args:
 
-
-        Returns:
-
         """
         # Apply non-maxima suppression to suppress weak, overlapping bounding boxes
         indices = cv.dnn.NMSBoxes(self.boxes, self.confidences, 0.5, 0.2)
-        centers_unsuppressed = self.centers.copy()
+        centers_unsuppressed = self.centers
         self.centers = []
+        res_image = self.image.copy()
+        target_index = -1
+
+        # Initialize target
+        self.identifier.set_target(self.target, self.boxes)
+        # Lock target
+        if len(self.boxes) != 0:
+            target_index = self.identifier.target_lock(res_image, 'ORB')
 
         # Ensure at least one detection exists
         if len(indices) > 0:
@@ -232,17 +218,19 @@ class Detector:
                 # Update the centroid
                 self.prev_centroid = centers_unsuppressed[i]
 
-                # Draw features
-                if self.prev_frame is not None:
-                    self.identifier.target_lock(self.prev_frame, self.image, 'ORB')
+                if i == target_index:
+                    cv.rectangle(self.image, (x, y), (x + w, y + h), (0, 0, 255), 2)
+                    text = "{} {:.4f}".format(self.labels[self.class_ids[i]], self.confidences[i])
+                    cv.putText(self.image, text, (x, y - 5), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
+                    ut.draw_image(self.image, centers_unsuppressed[i][0], centers_unsuppressed[i][1], 5, (0, 0, 255))
 
-                # Draw a bounding box rectangle and label on the image
-                color = [int(c) for c in self.COLORS[self.class_ids[i]]]
-                cv.rectangle(self.image, (x, y), (x + w, y + h), color, 2)
-                text = "{} {:.4f}".format(self.labels[self.class_ids[i]], self.confidences[i])
-                cv.putText(self.image, text, (x, y - 5), cv.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
-                ut.draw_image(self.image, centers_unsuppressed[i][0], centers_unsuppressed[i][1], 5, color)
-                self.prev_frame = self.image
+                else:
+                    # Draw a bounding box rectangle and label on the image
+                    cv.rectangle(self.image, (x, y), (x + w, y + h), (255, 255, 255), 2)
+                    text = "{} {:.4f}".format(self.labels[self.class_ids[i]], self.confidences[i])
+                    cv.putText(self.image, text, (x, y - 5), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+                    ut.draw_image(self.image, centers_unsuppressed[i][0], centers_unsuppressed[i][1], 5, (255, 255, 255))
+
 
     def _capture_target(self, i):
         """
@@ -289,7 +277,7 @@ class Detector:
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
-# ------------------------------------------ Homing Guidance ------------------------------------------------------------------- #
+# ----------------------------------------------- Homing Guidance -------------------------------------------------------------- #
 
 class Guide:
 
@@ -299,7 +287,7 @@ class Guide:
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
-# ------------------------------------------ User Interface -------------------------------------------------------------------- #
+# ----------------------------------------------- User Interface --------------------------------------------------------------- #
 
 class HomingUI(ut.UI):
 
@@ -319,7 +307,7 @@ class HomingUI(ut.UI):
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
-# ---------------------------------------------- Main -------------------------------------------------------------------------- #
+# ----------------------------------------------------- Main ------------------------------------------------------------------- #
 
 # Load labels
 labels_path = '../../datasets/models/coco.names'
@@ -341,7 +329,7 @@ while True:
     # Perform image processing
 
     # Perform object detection
-    det_frame = det.detect(frame, blob_size=(190, 190))
+    det_frame = det.detect(frame, blob_size=(320, 320))
 
     # Display result
     if ret:
