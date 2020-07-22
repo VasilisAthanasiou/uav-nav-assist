@@ -2,7 +2,8 @@ import cv2 as cv
 import numpy as np
 import app.src.unautil.utils as ut
 from threading import Thread
-import  time
+import time
+import sklearn as sk
 
 # -------------------------------------------------- Target Classes --------------------------------------------------------------- #
 
@@ -140,7 +141,7 @@ class Identifier:
                     target_matches.remove(tmatch)
             box_score.append(score)
 
-        if max(box_score) > 20:
+        if max(box_score) > 33:
             return box_score.index(max(box_score))
         return -1
 
@@ -182,7 +183,7 @@ class Detector:
         self.target = Target(target_box, ((x + w)/2, (y + h)/2), image=cv.imread('../../datasets/testing/target.jpg'))
         self.target_update_counter = 0
         self.prev_index = -1
-        self.identifier = Identifier(n_features=1000)
+        self.identifier = Identifier(n_features=2000)
 
     def _init_network(self):
         """
@@ -252,11 +253,13 @@ class Detector:
         if len(self.boxes) != 0:
             target_index = self.identifier.target_lock(res_image, 'ORB')
 
+
         # Ensure at least one detection exists
         if len(indices) > 0:
 
             # Loop over the indexes we are keeping
             for i in indices.flatten():
+                print(target_index, i, self.labels[self.class_ids[i]])
                 # Extract the bounding box coordinates
                 (x, y) = (self.boxes[i][0], self.boxes[i][1])
                 (w, h) = (self.boxes[i][2], self.boxes[i][3])
@@ -272,7 +275,7 @@ class Detector:
                     print('Target update expected in: {} frames'.format(10 - self.target_update_counter))
                     if self.target_update_counter >= 10 and self.prev_index == i:
                         print('Updated target image')
-                        self.target.image = self.image  # TODO: Make a function for this
+                        self.target.image = res_image  # TODO: Make a function for this
                         self.target.update_data(self.boxes[i], (tcenter_x, tcenter_y))
                         self.target_update_counter = 0
                     self.prev_index = i
@@ -407,13 +410,13 @@ class ThreadedCamera(object):
         if frame is not None:
             cv.imshow('frame', frame)
             if cv.waitKey(self.FPS_MS) & 0XFF == 27:
-                cap.release()
+                self.cap.release()
                 cv.destroyAllWindows()
                 exit()
         else:
             cv.imshow('frame', self.frame)
             if cv.waitKey(self.FPS_MS) & 0XFF == 27:
-                cap.release()
+                self.cap.release()
                 cv.destroyAllWindows()
                 exit()
 
@@ -433,12 +436,10 @@ ui = HomingUI()
 
 camera_index = 0
 for i in range(1, 10):
-    cap = cv.VideoCapture(cam_URL)
+    cap = cv.VideoCapture(0)
     if cap.isOpened():
         camera_index = i
         break
-
-# Load our input image and grab its spatial dimensions
 
 target_box = ui.set_up_target(cap)
 _, frame = cap.read()
@@ -446,7 +447,7 @@ cv.imshow('Cropped', frame[target_box[1]:target_box[1]+target_box[3], target_box
 cv.waitKey(0)
 cap.release()
 
-threaded_cam = ThreadedCamera(cam_URL)
+threaded_cam = ThreadedCamera(0)
 det = Detector(config_path, weights_path, labels_stream, target_box)
 
 while True:
