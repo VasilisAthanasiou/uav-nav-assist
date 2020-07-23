@@ -3,7 +3,6 @@ import numpy as np
 import app.src.unautil.utils as ut
 from threading import Thread
 import time
-import sklearn as sk
 
 # -------------------------------------------------- Target Classes --------------------------------------------------------------- #
 
@@ -18,9 +17,6 @@ class Target:
         self.bounding_box = bounding_box
         self.centroid = centroid
 
-    def reset_target(self):
-        self.__init__()
-
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
 # -------------------------------------------------- Identifier ---------------------------------------------------------------- #
@@ -29,7 +25,7 @@ class Target:
 class Identifier:
     def __init__(self, target=None, n_features=100, hessian_thresh=100):
         self.target = target
-        self.boxes = None
+        self.uav_frame = None
         self.n_features = n_features
         self.hessian_thresh = hessian_thresh
         self.tid = 0
@@ -90,24 +86,17 @@ class Identifier:
         bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
 
         # Perform the matching between the ORB descriptors of the training image and the test image
-        matches = bf.match(target_descriptors, uav_descriptors)
+        if target_descriptors.any() and uav_descriptors.any():
+            matches = bf.match(target_descriptors, uav_descriptors)
 
-        # The matches with shorter distance are the ones we want.
-        matches = sorted(matches, key=lambda x: x.distance)
+            # The matches with shorter distance are the ones we want.
+            matches = sorted(matches, key=lambda x: x.distance)
 
-        result = cv.drawMatches(target_keyp_img, target_keypoints, uav_keyp_img, uav_keypoints, matches, uav_image, flags=2)
-        cv.imshow('Target keypoints', result)
-        return target_keypoints, uav_keypoints, matches
+            result = cv.drawMatches(target_keyp_img, target_keypoints, uav_keyp_img, uav_keypoints, matches, uav_image, flags=2)
+            cv.imshow('Target keypoints', result)
+            return target_keypoints, uav_keypoints, matches
+        return False, False, False
 
-    def set_target(self, target, boxes):
-        """
-        Sets a target up
-        Args:
-            target: Target object
-            boxes: Bounding boxes from detected objects
-        """
-        self.target = target
-        self.boxes = boxes
 
     def target_lock(self, uav_image, method):
         """
@@ -118,223 +107,51 @@ class Identifier:
 
         Returns: Index of target detection
         """
-        target_keypoints, uav_keypoints, matches = self._compare_features(self.target, uav_image, method)
-        (tx, ty) = self.target.bounding_box[0], self.target.bounding_box[1]
-        (tw, th) = self.target.bounding_box[2], self.target.bounding_box[3]
+        self.uav_frame = uav_image
 
-        # Add that target keypoints into a list
-        target_matches = []
-        for match in matches:
-            tkeyp_x, tkeyp_y = target_keypoints[match.queryIdx].pt  # queryIdx is the index of a target keypoint that got matched
-            if tx + tw >= int(tkeyp_x) >= tx and ty + th >= int(tkeyp_y) >= ty:  # If the matched keypoint is within the target ROI
-                target_matches.append(uav_keypoints[match.trainIdx].pt)  # Append the corresponding UAV keypoint
+        target_keypoints, uav_keypoints, matches = self._compare_features(self.target, self.uav_frame, method)
 
-        box_score = []
-        # Check which of the detection ROI's has the largest amount of keypoints associated with the target
-        for i in range(len(self.boxes)):
-            (bx, by) = self.boxes[i][0], self.boxes[i][1]
-            (bw, bh) = self.boxes[i][2], self.boxes[i][3]
-            score = 0
-            for tmatch in target_matches:
-                if bx + bw >= int(tmatch[0]) >= bx and by + bh >= int(tmatch[1]) >= by:
-                    score += 1
-                    target_matches.remove(tmatch)
-            box_score.append(score)
+        if not matches:
+            return False
 
-        if max(box_score) > 33:
-            return box_score.index(max(box_score))
-        return -1
+        # Add target keypoints into a list
+        target_matches = [uav_keypoints[match.trainIdx].pt for match in matches]  # Append the corresponding UAV keypoint
+        target_matches.sort(key=lambda x: ut.compute_euclidean(x, (0, 0)))
+        for mtc in target_matches:
+            print(mtc)
 
-
-# ------------------------------------------------------------------------------------------------------------------------------ #
-
-# ------------------------------------------------------ Detector -------------------------------------------------------------- #
-
-class Detector:
-    def __init__(self, config, weights, labels, target_box):
-        """
-        Args:
-            config: Path for the network configuration file
-            weights: Path for the network weights file
-            labels: Path for the network labels file
-        """
-
-        # ----------------------------------- Network fields ---------------------------------------------------- #
-        self.config, self.weights = config, weights
-        self.image = None
-        self.labels = labels
-
-        # Create a list of colors that will be used for bounding boxes
-        np.random.seed(42)
-        self.COLORS = np.random.randint(0, 255, size=(len(self.labels), 3), dtype="uint8")
-
-        # Initialize network
-        self.net = self._init_network()
-        # Determine the *output* layer names needed from YOLO
-
-        self.layer_names = [self.net.getLayerNames()[i[0] - 1] for i in self.net.getUnconnectedOutLayers()]
-
-        self.boxes = []
-        self.confidences = []
-        self.class_ids = []
-        self.centers = []
-        # ------------------------------------------------------------------------------------------------------- #
-        x, y, w, h = target_box
-        self.target = Target(target_box, ((x + w)/2, (y + h)/2), image=cv.imread('../../datasets/testing/target.jpg'))
-        self.target_update_counter = 0
-        self.prev_index = -1
-        self.identifier = Identifier(n_features=2000)
-
-    def _init_network(self):
-        """
-        Initializes Neural Network pre-trained model
-        """
-        if '.cfg' in self.config and '.weights' in self.weights:
-            return cv.dnn.readNetFromDarknet(self.config, self.weights)
-
-    def _extract_output_data(self, layer_outputs, img):
-        """Takes in network output data and processes it into useful data that will be used
-        for bounding boxes, confidences and class IDs
-        Args:
-            layer_outputs: Output data produced from net.forward()
-        """
-        # Initialize lists of detected bounding boxes, confidences, and class IDs
-        self.boxes = []
-        self.confidences = []
-        self.class_ids = []
-        self.centers = []
-
-        img_height, img_width = img.shape[:2]
-
-        # Loop over each of the layer outputs
-        for output in layer_outputs:
-            # Loop over each of the detections
-            for detection in output:
-
-                # Extract the class ID and confidence (i.e., probability) of the current object detection
-                scores = detection[5:]
-                class_id = np.argmax(scores)
-                confidence = scores[class_id]
-
-                # Filter out weak predictions by ensuring the detected probability is greater than the minimum probability
-                if confidence > 0.5:
-                    # Scale the bounding box coordinates back relative to the size of the image, keeping in mind that YOLO
-                    # actually returns the center (x, y)-coordinates of the bounding box followed by the boxes' width and height
-
-                    box = detection[0:4] * np.array([img_width, img_height, img_width, img_height])
-                    (center_x, center_y, det_width, det_height) = box.astype("int")
-
-                    # Use the center (x, y)-coordinates to derive the top and
-                    # and left corner of the bounding box
-                    x = int(center_x - (det_width / 2))
-                    y = int(center_y - (det_height / 2))
-
-                    # Update list of bounding box coordinates, confidences, and class IDs
-                    self.boxes.append([x, y, int(det_width), int(det_height)])
-                    self.confidences.append(float(confidence))
-                    self.class_ids.append(class_id)
-                    self.centers.append((center_x, center_y))
-
-    def _draw_boxes(self):
-        """
-        Filters out overlapping bounding boxes and draws the rest of them on the image
-        """
-        # Apply non-maxima suppression to suppress weak, overlapping bounding boxes
-        indices = cv.dnn.NMSBoxes(self.boxes, self.confidences, 0.5, 0.2)
-        centers_unsuppressed = self.centers
-        self.centers = []
-        res_image = self.image.copy()
-        target_index = -1
-
-        # Initialize target
-        self.identifier.set_target(self.target, self.boxes)
-
-        # Lock target
-        if len(self.boxes) != 0:
-            target_index = self.identifier.target_lock(res_image, 'ORB')
-
-
-        # Ensure at least one detection exists
-        if len(indices) > 0:
-
-            # Loop over the indexes we are keeping
-            for i in indices.flatten():
-                print(target_index, i, self.labels[self.class_ids[i]])
-                # Extract the bounding box coordinates
-                (x, y) = (self.boxes[i][0], self.boxes[i][1])
-                (w, h) = (self.boxes[i][2], self.boxes[i][3])
-                self.centers.append(centers_unsuppressed[i])
-
-                if i == target_index:
-                    tcenter_x, tcenter_y = centers_unsuppressed[i]
-                    cv.rectangle(self.image, (x, y), (x + w, y + h), (0, 0, 255), 2)
-                    text = "{} {:.4f}".format(self.labels[self.class_ids[i]], self.confidences[i])
-                    cv.putText(self.image, text, (x, y - 5), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-                    ut.draw_image(self.image, centers_unsuppressed[i][0], centers_unsuppressed[i][1], 5, (0, 0, 255))
-                    self.target_update_counter += 1
-                    print('Target update expected in: {} frames'.format(10 - self.target_update_counter))
-                    if self.target_update_counter >= 10 and self.prev_index == i:
-                        print('Updated target image')
-                        self.target.image = res_image  # TODO: Make a function for this
-                        self.target.update_data(self.boxes[i], (tcenter_x, tcenter_y))
-                        self.target_update_counter = 0
-                    self.prev_index = i
+        clusters = []
+        cluster = []
+        prev_keypoint = (0, 0)
+        for keypoint in target_matches:
+            if prev_keypoint != (0, 0):
+                if ut.compute_euclidean(keypoint, prev_keypoint) < 33:
+                    cluster.append(keypoint)
+                    prev_keypoint = keypoint
                 else:
-                    # Draw a bounding box rectangle and label on the image
-                    cv.rectangle(self.image, (x, y), (x + w, y + h), (255, 255, 255), 2)
-                    text = "{} {:.4f}".format(self.labels[self.class_ids[i]], self.confidences[i])
-                    cv.putText(self.image, text, (x, y - 5), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-                    ut.draw_image(self.image, centers_unsuppressed[i][0], centers_unsuppressed[i][1], 5, (255, 255, 255))
+                    clusters.append(cluster)
+                    prev_keypoint = keypoint
+                    cluster = [keypoint]
+            else:
+                prev_keypoint = keypoint
 
+        clusters.sort(key=len)
+        target_cluster = clusters[-1]
 
-    def _capture_target(self, i):
-        """
-        Capture an image of a detected object
-        Args:
-            i: Index
-        Returns: Cropped image
-        """
-        target_image = ut.snap_image(self.image, self.boxes[i][0], self.boxes[i][1], width=self.boxes[i][2], height=self.boxes[i][3])
-        # cv.imshow('Target', target_image)
-        return target_image
+        # Check which of the detection ROI's has the largest amount of keypoints associated with the target
+        centroid_x, centroid_y = 0, 0
+        for point in target_cluster:
+            centroid_x, centroid_y = centroid_x + int(point[0]), centroid_y + int(point[1])
+        if len(target_cluster):
+            centroid = int(centroid_x / len(target_cluster)), int(centroid_y / len(target_cluster))
+            return centroid
+        return False
 
-
-    def detect(self, img, blob_size=(320, 320)):
-        """
-        Args:
-            img: Image in which object detection will perform on
-            blob_size: Shape of blob used in dnn.blobFromImage
-        Returns: Drawn image
-
-        """
-        # Initialize image
-        self.image = img
-
-        # Construct a blob from the input image and then perform a forward
-        # pass of the YOLO object detector, giving us our bounding boxes and
-        # associated probabilities
-        blob = cv.dnn.blobFromImage(self.image, 1 / 255.0, blob_size, swapRB=True, crop=False)
-        self.net.setInput(blob)
-
-        layer_outputs = self.net.forward(self.layer_names)
-
-        # Process the output layer data
-        self._extract_output_data(layer_outputs, self.image)
-
-        # Draw boxes
-        self._draw_boxes()
-
-        return self.image
 
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
-# ----------------------------------------------- Homing Guidance -------------------------------------------------------------- #
-
-class Guide:
-
-    def __init__(self):
-        print('Guide')
+# ---------------------------------------------- Object Detection ? ------------------------------------------------------------ #
 
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
@@ -348,7 +165,6 @@ class HomingUI(ut.UI):
         self.bounding_box = []
         self.clicked = False
 
-
     def _get_mouse_coord(self, event, x, y, flags, param):
         if event == cv.EVENT_LBUTTONDOWN and not self.clicked:
             self.bounding_box.append((x, y))
@@ -357,9 +173,9 @@ class HomingUI(ut.UI):
             print('Target captured. Press ESC')
             self.bounding_box.append((x, y))
 
-    def set_up_target(self, cap):
+    def set_up_target(self, cam_cap):
         while True:
-            _, feed = cap.read()
+            _, feed = cam_cap.read()
             cv.imshow('Target Selection', feed)
             # Wait for ESC
             if cv.waitKey(1) & 0XFF == 27:
@@ -375,7 +191,6 @@ class HomingUI(ut.UI):
             if cv.waitKey(1) == 27:
                 cv.destroyAllWindows()
                 break
-
 
         x, y = self.bounding_box[0]
         w, h = self.bounding_box[1]
@@ -423,16 +238,8 @@ class ThreadedCamera(object):
 
 # ----------------------------------------------------- Main ------------------------------------------------------------------- #
 
-# Load labels
-labels_path = '../../datasets/models/coco.names'
-labels_stream = open(labels_path).read().strip().split("\n")
-
-config_path = '../../datasets/models/yolov3/yolov3-tiny.cfg'
-weights_path = '../../datasets/models/yolov3/yolov3-tiny.weights'
-
 cam_URL = 'http://192.168.2.12:8080/video'
-
-ui = HomingUI()
+cap = None
 
 camera_index = 0
 for i in range(1, 10):
@@ -441,22 +248,29 @@ for i in range(1, 10):
         camera_index = i
         break
 
+ui = HomingUI()
+
 target_box = ui.set_up_target(cap)
-_, frame = cap.read()
-cv.imshow('Cropped', frame[target_box[1]:target_box[1]+target_box[3], target_box[0]: target_box[0] + target_box[2]])
+target_centroid = (target_box[0] + target_box[2]) / 2 + (target_box[1] + target_box[3]) / 2
+_, target_frame = cap.read()
+target_frame = target_frame[target_box[1]:target_box[1]+target_box[3], target_box[0]: target_box[0] + target_box[2]]
+cv.imshow('Cropped', target_frame)
 cv.waitKey(0)
 cap.release()
 
 threaded_cam = ThreadedCamera(0)
-det = Detector(config_path, weights_path, labels_stream, target_box)
+ident = Identifier(Target(target_box, target_centroid, target_frame), 10000)
 
 while True:
 
     # Perform object detection
     try:
-        det_frame = det.detect(threaded_cam.frame, blob_size=(320, 320))
+        res = ident.target_lock(threaded_cam.frame, 'ORB')
+        if res:
+            res_frame = ut.draw_image(threaded_cam.frame, res[0], res[1], 5, (0, 0, 255))
+        else:
+            res_frame = threaded_cam.frame
         # Display result
-        threaded_cam.show_frame(det_frame)
+        threaded_cam.show_frame(res_frame)
     except AttributeError:
         pass
-

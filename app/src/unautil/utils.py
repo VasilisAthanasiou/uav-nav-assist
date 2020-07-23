@@ -48,7 +48,6 @@ def snap_image(img, top_x, top_y, dim=0, width=0, height=0):
         return img[top_y:top_y + height, top_x:top_x + width].copy()
 
 
-
 def compute_euclidean(centroid1, centroid2):
     return np.sqrt(np.square(centroid1[0] - centroid2[0]) + np.square(centroid1[1] - centroid2[1]))
 
