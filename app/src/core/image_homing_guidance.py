@@ -48,7 +48,7 @@ class Identifier:
             image: Image that ORB will be applied to.
         Returns: Keypoints and descriptors
         """
-        orb = cv.ORB_create(self.n_features)
+        orb = cv.ORB_create(self.n_features, 1.1, 10, 2)
         keypoints = orb.detect(image)
         return orb.compute(image, keypoints)
 
@@ -79,6 +79,9 @@ class Identifier:
 
         Returns: Target keypoints, UAV keypoints and a match object that associates them
         """
+        # while target.image.shape[0] < 300 and target.image.shape[1] < 300:
+        #     target.image = cv.resize(target.image, (target.image.shape[0] * 2, target.image.shape[1] * 2))
+        #     print(target.image.shape)
         target_keypoints, target_descriptors = self._extract_features(method, target.image)
         uav_keypoints, uav_descriptors = self._extract_features(method, uav_image)
         target_keyp_img = cv.drawKeypoints(target.image, target_keypoints, outImage=None)
@@ -125,7 +128,7 @@ class Identifier:
         prev_keypoint = (0, 0)
         for keypoint in target_matches:
             if prev_keypoint != (0, 0):
-                if ut.compute_euclidean(keypoint, prev_keypoint) < 33:
+                if ut.compute_euclidean(keypoint, prev_keypoint) < 22:
                     cluster.append(keypoint)
                     prev_keypoint = keypoint
                 else:
@@ -134,6 +137,7 @@ class Identifier:
                     cluster = [keypoint]
             else:
                 prev_keypoint = keypoint
+        clusters.append(cluster)
 
         clusters.sort(key=len)
         target_cluster = clusters[-1]
@@ -243,7 +247,7 @@ cap = None
 
 camera_index = 0
 for i in range(1, 10):
-    cap = cv.VideoCapture(0)
+    cap = cv.VideoCapture(camera_index)
     if cap.isOpened():
         camera_index = i
         break
@@ -258,8 +262,8 @@ cv.imshow('Cropped', target_frame)
 cv.waitKey(0)
 cap.release()
 
-threaded_cam = ThreadedCamera(0)
-ident = Identifier(Target(target_box, target_centroid, target_frame), 10000)
+threaded_cam = ThreadedCamera(camera_index)
+ident = Identifier(Target(target_box, target_centroid, target_frame), 50000)
 
 while True:
 
