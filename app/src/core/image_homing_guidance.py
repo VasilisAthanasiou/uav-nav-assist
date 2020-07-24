@@ -4,6 +4,7 @@ import app.src.unautil.utils as ut
 from threading import Thread
 import time
 
+# TODO: ADD COMMENTS AND DOCSTRINGS
 # -------------------------------------------------- Target Classes --------------------------------------------------------------- #
 
 class Target:
@@ -28,7 +29,9 @@ class Identifier:
         self.uav_frame = None
         self.n_features = n_features
         self.hessian_thresh = hessian_thresh
-        self.tid = 0
+        self.fnn = ut.FNN()
+        self.reference_point = (0, 0)
+
 
     def _use_surf(self, image):
         """
@@ -79,13 +82,9 @@ class Identifier:
 
         Returns: Target keypoints, UAV keypoints and a match object that associates them
         """
-        # while target.image.shape[0] < 300 and target.image.shape[1] < 300:
-        #     target.image = cv.resize(target.image, (target.image.shape[0] * 2, target.image.shape[1] * 2))
-        #     print(target.image.shape)
+
         target_keypoints, target_descriptors = self._extract_features(method, target.image)
         uav_keypoints, uav_descriptors = self._extract_features(method, uav_image)
-        target_keyp_img = cv.drawKeypoints(target.image, target_keypoints, outImage=None)
-        uav_keyp_img = cv.drawKeypoints(uav_image, uav_keypoints, outImage=None)
         bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
 
         # Perform the matching between the ORB descriptors of the training image and the test image
@@ -95,8 +94,6 @@ class Identifier:
             # The matches with shorter distance are the ones we want.
             matches = sorted(matches, key=lambda x: x.distance)
 
-            result = cv.drawMatches(target_keyp_img, target_keypoints, uav_keyp_img, uav_keypoints, matches, uav_image, flags=2)
-            cv.imshow('Target keypoints', result)
             return target_keypoints, uav_keypoints, matches
         return False, False, False
 
@@ -111,46 +108,43 @@ class Identifier:
         Returns: Index of target detection
         """
         self.uav_frame = uav_image
-
         target_keypoints, uav_keypoints, matches = self._compare_features(self.target, self.uav_frame, method)
 
         if not matches:
             return False
 
         # Add target keypoints into a list
-        target_matches = [uav_keypoints[match.trainIdx].pt for match in matches]  # Append the corresponding UAV keypoint
-        target_matches.sort(key=lambda x: ut.compute_euclidean(x, (0, 0)))
-        for mtc in target_matches:
-            print(mtc)
+        matched_keypoints = [uav_keypoints[match.trainIdx] for match in matches]  # Append the corresponding UAV keypoint object
 
-        clusters = []
-        cluster = []
-        prev_keypoint = (0, 0)
-        for keypoint in target_matches:
-            if prev_keypoint != (0, 0):
-                if ut.compute_euclidean(keypoint, prev_keypoint) < 22:
-                    cluster.append(keypoint)
-                    prev_keypoint = keypoint
-                else:
-                    clusters.append(cluster)
-                    prev_keypoint = keypoint
-                    cluster = [keypoint]
-            else:
-                prev_keypoint = keypoint
-        clusters.append(cluster)
+        # Clustering algorithm
+        clusters = self.fnn.compute_clusters(matched_keypoints, self.reference_point)
+
+        # End of clustering algorithm
 
         clusters.sort(key=len)
         target_cluster = clusters[-1]
 
+        uav_keyp_img = uav_image
+        color = (0, 0, 0)
+        for cluster in clusters:
+            if cluster != target_cluster:
+                while color == (0, 0, 255) or color == (0, 0, 0):
+                    color = (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))
+                uav_keyp_img = cv.drawKeypoints(uav_keyp_img, cluster, outImage=None, color=(255, 255, 255))
+            else:
+                uav_keyp_img = cv.drawKeypoints(uav_keyp_img, cluster, outImage=None, color=(0, 0, 255))
+
+        cv.imshow('UAV keypoints', uav_keyp_img)
+        # cv.imshow('Target Matches', cv.drawMatches(self.target.image, target_keypoints, uav_image, uav_keypoints, matches, outImg=None))
         # Check which of the detection ROI's has the largest amount of keypoints associated with the target
         centroid_x, centroid_y = 0, 0
         for point in target_cluster:
-            centroid_x, centroid_y = centroid_x + int(point[0]), centroid_y + int(point[1])
+            centroid_x, centroid_y = centroid_x + int(point.pt[0]), centroid_y + int(point.pt[1])
         if len(target_cluster):
             centroid = int(centroid_x / len(target_cluster)), int(centroid_y / len(target_cluster))
+            self.reference_point = centroid
             return centroid
         return False
-
 
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
@@ -247,7 +241,7 @@ cap = None
 
 camera_index = 0
 for i in range(1, 10):
-    cap = cv.VideoCapture(camera_index)
+    cap = cv.VideoCapture(0)
     if cap.isOpened():
         camera_index = i
         break
@@ -262,10 +256,11 @@ cv.imshow('Cropped', target_frame)
 cv.waitKey(0)
 cap.release()
 
-threaded_cam = ThreadedCamera(camera_index)
-ident = Identifier(Target(target_box, target_centroid, target_frame), 50000)
+threaded_cam = ThreadedCamera(0)
+ident = Identifier(Target(target_box, target_centroid, target_frame), 2000)
 
 while True:
+    start = time.time()
 
     # Perform object detection
     try:
@@ -276,5 +271,7 @@ while True:
             res_frame = threaded_cam.frame
         # Display result
         threaded_cam.show_frame(res_frame)
+        print('Operations took {:2f}s'.format(time.time() - start))
+
     except AttributeError:
         pass
