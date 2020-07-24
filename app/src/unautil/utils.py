@@ -55,34 +55,27 @@ def compute_euclidean(centroid1, centroid2):
 
 # -------------------------------------------------- Clustering ------------------------------------------------------------ #
 
-class FNN:
-    def __init__(self):
-        self.keypoints = []
-        self.clusters = []
-        self.prev_keypoint = (0, 0)
 
-    def _initialize_variables(self, keypoints):
-        self.keypoints = keypoints
+def fpnn(keypoints, reference_point, mdist=50):  # Fast Point oriented Nearest Neighbors
 
-    def compute_clusters(self, keypoints, reference_point, mdist=50):
-
-        self._initialize_variables(keypoints)
-        keypoints.sort(key=lambda x: compute_euclidean(x.pt, reference_point))
-        cluster = []
-        for keypoint in self.keypoints:
-            if self.prev_keypoint != (0, 0):
-                if compute_euclidean(keypoint.pt, self.prev_keypoint) <= mdist:
-                    cluster.append(keypoint)
-                    self.prev_keypoint = keypoint.pt
-                else:
-                    self.clusters.append(cluster)
-                    self.prev_keypoint = keypoint.pt
-                    cluster = [keypoint]
+    keypoints.sort(key=lambda x: compute_euclidean(x.pt, reference_point))
+    prev_keypoint = (0, 0)
+    clusters = []
+    cluster = []
+    for keypoint in keypoints:
+        if prev_keypoint != (0, 0):
+            if compute_euclidean(keypoint.pt, prev_keypoint) <= mdist:
+                cluster.append(keypoint)
+                prev_keypoint = keypoint.pt
             else:
-                self.prev_keypoint = keypoint.pt
-        self.clusters.append(cluster)
+                clusters.append(cluster)
+                prev_keypoint = keypoint.pt
+                cluster = [keypoint]
+        else:
+            prev_keypoint = keypoint.pt
+    clusters.append(cluster)
 
-        return self.clusters
+    return clusters
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 

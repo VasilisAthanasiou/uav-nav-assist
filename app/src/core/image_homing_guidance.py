@@ -29,7 +29,6 @@ class Identifier:
         self.uav_frame = None
         self.n_features = n_features
         self.hessian_thresh = hessian_thresh
-        self.fnn = ut.FNN()
         self.reference_point = (0, 0)
 
 
@@ -107,8 +106,7 @@ class Identifier:
 
         Returns: Index of target detection
         """
-        self.uav_frame = uav_image
-        target_keypoints, uav_keypoints, matches = self._compare_features(self.target, self.uav_frame, method)
+        target_keypoints, uav_keypoints, matches = self._compare_features(self.target, uav_image, method)
 
         if not matches:
             return False
@@ -117,14 +115,12 @@ class Identifier:
         matched_keypoints = [uav_keypoints[match.trainIdx] for match in matches]  # Append the corresponding UAV keypoint object
 
         # Clustering algorithm
-        clusters = self.fnn.compute_clusters(matched_keypoints, self.reference_point)
-
-        # End of clustering algorithm
+        clusters = ut.fpnn(matched_keypoints, self.reference_point)
 
         clusters.sort(key=len)
         target_cluster = clusters[-1]
 
-        uav_keyp_img = uav_image
+        uav_keyp_img = uav_image.copy()
         color = (0, 0, 0)
         for cluster in clusters:
             if cluster != target_cluster:
@@ -145,11 +141,6 @@ class Identifier:
             self.reference_point = centroid
             return centroid
         return False
-
-
-# ------------------------------------------------------------------------------------------------------------------------------ #
-
-# ---------------------------------------------- Object Detection ? ------------------------------------------------------------ #
 
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
@@ -241,7 +232,7 @@ cap = None
 
 camera_index = 0
 for i in range(1, 10):
-    cap = cv.VideoCapture(0)
+    cap = cv.VideoCapture(i)
     if cap.isOpened():
         camera_index = i
         break
@@ -256,8 +247,8 @@ cv.imshow('Cropped', target_frame)
 cv.waitKey(0)
 cap.release()
 
-threaded_cam = ThreadedCamera(0)
-ident = Identifier(Target(target_box, target_centroid, target_frame), 2000)
+threaded_cam = ThreadedCamera(camera_index)
+ident = Identifier(Target(target_box, target_centroid, target_frame), 50000)
 
 while True:
     start = time.time()
