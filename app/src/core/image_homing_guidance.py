@@ -9,14 +9,9 @@ import time
 
 class Target:
     def __init__(self, bounding_box, centroid, image=None, target_id=0):
-        self.target_id = target_id
         self.image = image
-        self.bounding_box = bounding_box
-        self.centroid = centroid
 
-    def update_data(self, bounding_box, centroid):
-        self.bounding_box = bounding_box
-        self.centroid = centroid
+
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
@@ -24,13 +19,12 @@ class Target:
 
 
 class Identifier:
-    def __init__(self, target=None, n_features=100, hessian_thresh=100):
-        self.target = target
+    def __init__(self, target_image=None, n_features=100, hessian_thresh=100):
+        self.target_image = target_image
         self.uav_frame = None
         self.n_features = n_features
         self.hessian_thresh = hessian_thresh
         self.reference_point = (0, 0)
-
 
     def _use_surf(self, image):
         """
@@ -71,7 +65,7 @@ class Identifier:
         else:
             print('No valid method selected')
 
-    def _compare_features(self, target, uav_image, method):
+    def _compare_features(self, target_image, uav_image, method):
         """
         Matches features from a pre-determined target with a UAV image
         Args:
@@ -82,7 +76,7 @@ class Identifier:
         Returns: Target keypoints, UAV keypoints and a match object that associates them
         """
 
-        target_keypoints, target_descriptors = self._extract_features(method, target.image)
+        target_keypoints, target_descriptors = self._extract_features(method, target_image)
         uav_keypoints, uav_descriptors = self._extract_features(method, uav_image)
         bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
 
@@ -96,7 +90,6 @@ class Identifier:
             return target_keypoints, uav_keypoints, matches
         return False, False, False
 
-
     def target_lock(self, uav_image, method):
         """
         Determines which of the current detections is the target
@@ -106,7 +99,7 @@ class Identifier:
 
         Returns: Index of target detection
         """
-        target_keypoints, uav_keypoints, matches = self._compare_features(self.target, uav_image, method)
+        target_keypoints, uav_keypoints, matches = self._compare_features(self.target_image, uav_image, method)
 
         if not matches:
             return False
@@ -174,9 +167,10 @@ class HomingUI(ut.UI):
 
         cv.namedWindow('Select ROI')
         cv.setMouseCallback('Select ROI', self._get_mouse_coord)
+        target_frame = cv.imread('../../datasets/testing/target.jpg')
         while True:
             # Select target ROI
-            cv.imshow('Select ROI', cv.imread('../../datasets/testing/target.jpg'))
+            cv.imshow('Select ROI', target_frame)
             if cv.waitKey(1) == 27:
                 cv.destroyAllWindows()
                 break
@@ -184,7 +178,8 @@ class HomingUI(ut.UI):
         x, y = self.bounding_box[0]
         w, h = self.bounding_box[1]
         w, h = w - x, h - y
-        return x, y, w, h
+
+        return target_frame[y: y + h, x: x + w]
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
@@ -231,7 +226,7 @@ cam_URL = 'http://192.168.2.12:8080/video'
 cap = None
 
 camera_index = 0
-for i in range(1, 10):
+for i in range(0, 10):
     cap = cv.VideoCapture(i)
     if cap.isOpened():
         camera_index = i
@@ -239,16 +234,13 @@ for i in range(1, 10):
 
 ui = HomingUI()
 
-target_box = ui.set_up_target(cap)
-target_centroid = (target_box[0] + target_box[2]) / 2 + (target_box[1] + target_box[3]) / 2
-_, target_frame = cap.read()
-target_frame = target_frame[target_box[1]:target_box[1]+target_box[3], target_box[0]: target_box[0] + target_box[2]]
+target_frame = ui.set_up_target(cap)
 cv.imshow('Cropped', target_frame)
 cv.waitKey(0)
 cap.release()
 
 threaded_cam = ThreadedCamera(camera_index)
-ident = Identifier(Target(target_box, target_centroid, target_frame), 50000)
+ident = Identifier(target_frame, 50000)
 
 while True:
     start = time.time()
