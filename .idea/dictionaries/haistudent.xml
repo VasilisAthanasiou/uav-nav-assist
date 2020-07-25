@@ -3,14 +3,19 @@
     <words>
       <w>binarize</w>
       <w>coeff</w>
+      <w>convolutional</w>
       <w>dataset</w>
       <w>datasets</w>
       <w>enduml</w>
+      <w>imshow</w>
       <w>keyp</w>
       <w>keypoint</w>
       <w>keypoints</w>
       <w>maxima</w>
+      <w>maxpool</w>
       <w>startuml</w>
+      <w>tkeyp</w>
+      <w>tmatch</w>
       <w>vals</w>
       <w>yolo</w>
     </words>
