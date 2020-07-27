@@ -1,7 +1,7 @@
 # UAV Navigation Assist
 UAV Navigation Assist is a set of tools that can be used to guide UAV's under certain scenarios
 
-##Use Cases
+## Use Cases
 1. Long Range Cruising:<br>
 The travel_assist module corrects the UAV's Inertial Navigation System inaccuracy using a [DSMAC](https://en.wikipedia.org/wiki/TERCOM#DSMAC) algorithm based on OpenCV's [Template Matching](https://en.wikipedia.org/wiki/Template_matching#:~:text=Template%20matching%20is%20a%20technique,to%20detect%20edges%20in%20images.).
 2. Target Locking and Homing:<br>
