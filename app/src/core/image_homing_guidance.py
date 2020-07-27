@@ -3,36 +3,12 @@ import numpy as np
 import app.src.unautil.utils as ut
 from threading import Thread
 import time
-import sklearn as sk
 
-# -------------------------------------------------- Target Classes --------------------------------------------------------------- #
-
-class Target:
-    def __init__(self, bounding_box, centroid, image=None, target_id=0):
-        self.target_id = target_id
-        self.image = image
-        self.bounding_box = bounding_box
-        self.centroid = centroid
-
-    def update_data(self, bounding_box, centroid):
-        self.bounding_box = bounding_box
-        self.centroid = centroid
-
-    def reset_target(self):
-        self.__init__()
-
-# ------------------------------------------------------------------------------------------------------------------------------ #
-
-# -------------------------------------------------- Identifier ---------------------------------------------------------------- #
-
-
-class Identifier:
-    def __init__(self, target=None, n_features=100, hessian_thresh=100):
-        self.target = target
-        self.boxes = None
+# -------------------------------------------------- Feature Extractor ---------------------------------------------------------------- #
+class FeatureExtractor:
+    def __init__(self, n_features=10000, hessian_thresh=100):
         self.n_features = n_features
         self.hessian_thresh = hessian_thresh
-        self.tid = 0
 
     def _use_surf(self, image):
         """
@@ -52,7 +28,7 @@ class Identifier:
             image: Image that ORB will be applied to.
         Returns: Keypoints and descriptors
         """
-        orb = cv.ORB_create(self.n_features)
+        orb = cv.ORB_create(self.n_features, 1.05, 20, 2)  # TODO: Read more about ORB and tweak parameters to better suit the problem
         keypoints = orb.detect(image)
         return orb.compute(image, keypoints)
 
@@ -62,7 +38,6 @@ class Identifier:
         Args:
             method: Method that will be called
             image: Image that the method will extract features from
-
         Returns: Keypoints and Descriptors
 
         """
@@ -73,268 +48,87 @@ class Identifier:
         else:
             print('No valid method selected')
 
-    def _compare_features(self, target, uav_image, method):
+    def match_features(self, target_image, uav_image, method):
         """
         Matches features from a pre-determined target with a UAV image
         Args:
-            target: Target object
+            target_image: Image of selected target
             uav_image: Image from video feed
             method: Method that will be used to extract features
-
         Returns: Target keypoints, UAV keypoints and a match object that associates them
         """
-        target_keypoints, target_descriptors = self._extract_features(method, target.image)
+
+        target_keypoints, target_descriptors = self._extract_features(method, target_image)
         uav_keypoints, uav_descriptors = self._extract_features(method, uav_image)
-        target_keyp_img = cv.drawKeypoints(target.image, target_keypoints, outImage=None)
-        uav_keyp_img = cv.drawKeypoints(uav_image, uav_keypoints, outImage=None)
         bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
 
         # Perform the matching between the ORB descriptors of the training image and the test image
-        matches = bf.match(target_descriptors, uav_descriptors)
+        if target_descriptors.any() and uav_descriptors.any():
+            matches = bf.match(target_descriptors, uav_descriptors)
 
-        # The matches with shorter distance are the ones we want.
-        matches = sorted(matches, key=lambda x: x.distance)
+            return target_keypoints, uav_keypoints, matches
+        return False, False, False
 
-        result = cv.drawMatches(target_keyp_img, target_keypoints, uav_keyp_img, uav_keypoints, matches, uav_image, flags=2)
-        cv.imshow('Target keypoints', result)
-        return target_keypoints, uav_keypoints, matches
+# ------------------------------------------------------------------------------------------------------------------------------ #
 
-    def set_target(self, target, boxes):
-        """
-        Sets a target up
-        Args:
-            target: Target object
-            boxes: Bounding boxes from detected objects
-        """
-        self.target = target
-        self.boxes = boxes
+# ----------------------------------------------- Tracker --------------------------------------------------------------- #
 
-    def target_lock(self, uav_image, method):
+class Tracker:
+    def __init__(self, target_image=None, n_features=10000, hessian_thresh=100, nn_dist=50):
+        self.target_image = target_image
+        self.uav_image = None
+        self.feature_extractor = FeatureExtractor(n_features, hessian_thresh)
+        self.reference_point = (0, 0)
+        self.nn_dist = nn_dist
+
+    def track(self, uav_frame, method):
+        self.uav_image = uav_frame
+        target_keypoints, uav_keypoints, matches = self.feature_extractor.match_features(self.target_image, uav_frame, method)
+        if not matches:
+            return False
+        return self._target_lock(target_keypoints, uav_keypoints, matches, self.nn_dist)
+
+    def _target_lock(self, target_keypoints, uav_keypoints, matches, nn_dist):
         """
         Determines which of the current detections is the target
         Args:
-            uav_image: Image from video feed
-            method: Method used to extract features
-
+            matches:
+            uav_keypoints:
+            target_keypoints:
+            nn_dist: Minimum distance of nearest neighbor
         Returns: Index of target detection
         """
-        target_keypoints, uav_keypoints, matches = self._compare_features(self.target, uav_image, method)
-        (tx, ty) = self.target.bounding_box[0], self.target.bounding_box[1]
-        (tw, th) = self.target.bounding_box[2], self.target.bounding_box[3]
 
-        # Add that target keypoints into a list
-        target_matches = []
-        for match in matches:
-            tkeyp_x, tkeyp_y = target_keypoints[match.queryIdx].pt  # queryIdx is the index of a target keypoint that got matched
-            if tx + tw >= int(tkeyp_x) >= tx and ty + th >= int(tkeyp_y) >= ty:  # If the matched keypoint is within the target ROI
-                target_matches.append(uav_keypoints[match.trainIdx].pt)  # Append the corresponding UAV keypoint
+        # Add target keypoints into a list
+        matched_keypoints = [uav_keypoints[match.trainIdx] for match in matches]  # Append the corresponding UAV keypoint object
 
-        box_score = []
-        # Check which of the detection ROI's has the largest amount of keypoints associated with the target
-        for i in range(len(self.boxes)):
-            (bx, by) = self.boxes[i][0], self.boxes[i][1]
-            (bw, bh) = self.boxes[i][2], self.boxes[i][3]
-            score = 0
-            for tmatch in target_matches:
-                if bx + bw >= int(tmatch[0]) >= bx and by + bh >= int(tmatch[1]) >= by:
-                    score += 1
-                    target_matches.remove(tmatch)
-            box_score.append(score)
+        # Clustering algorithm
+        clusters = ut.fpnn(matched_keypoints, self.reference_point, nn_dist)
 
-        if max(box_score) > 33:
-            return box_score.index(max(box_score))
-        return -1
+        clusters.sort(key=len)
+        target_cluster = clusters[-1]
 
+        uav_keyp_img = self.uav_image.copy()
+        color = (0, 0, 0)
+        for cluster in clusters:
+            if cluster != target_cluster:
+                while color == (0, 0, 255) or color == (0, 0, 0):
+                    color = (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))
+                uav_keyp_img = cv.drawKeypoints(uav_keyp_img, cluster, outImage=None, color=(255, 255, 255))
+            else:
+                uav_keyp_img = cv.drawKeypoints(uav_keyp_img, cluster, outImage=None, color=(0, 0, 255))
 
-# ------------------------------------------------------------------------------------------------------------------------------ #
+        cv.imshow('UAV keypoints', uav_keyp_img)
 
-# ------------------------------------------------------ Detector -------------------------------------------------------------- #
-
-class Detector:
-    def __init__(self, config, weights, labels, target_box):
-        """
-        Args:
-            config: Path for the network configuration file
-            weights: Path for the network weights file
-            labels: Path for the network labels file
-        """
-
-        # ----------------------------------- Network fields ---------------------------------------------------- #
-        self.config, self.weights = config, weights
-        self.image = None
-        self.labels = labels
-
-        # Create a list of colors that will be used for bounding boxes
-        np.random.seed(42)
-        self.COLORS = np.random.randint(0, 255, size=(len(self.labels), 3), dtype="uint8")
-
-        # Initialize network
-        self.net = self._init_network()
-        # Determine the *output* layer names needed from YOLO
-
-        self.layer_names = [self.net.getLayerNames()[i[0] - 1] for i in self.net.getUnconnectedOutLayers()]
-
-        self.boxes = []
-        self.confidences = []
-        self.class_ids = []
-        self.centers = []
-        # ------------------------------------------------------------------------------------------------------- #
-        x, y, w, h = target_box
-        self.target = Target(target_box, ((x + w)/2, (y + h)/2), image=cv.imread('../../datasets/testing/target.jpg'))
-        self.target_update_counter = 0
-        self.prev_index = -1
-        self.identifier = Identifier(n_features=2000)
-
-    def _init_network(self):
-        """
-        Initializes Neural Network pre-trained model
-        """
-        if '.cfg' in self.config and '.weights' in self.weights:
-            return cv.dnn.readNetFromDarknet(self.config, self.weights)
-
-    def _extract_output_data(self, layer_outputs, img):
-        """Takes in network output data and processes it into useful data that will be used
-        for bounding boxes, confidences and class IDs
-        Args:
-            layer_outputs: Output data produced from net.forward()
-        """
-        # Initialize lists of detected bounding boxes, confidences, and class IDs
-        self.boxes = []
-        self.confidences = []
-        self.class_ids = []
-        self.centers = []
-
-        img_height, img_width = img.shape[:2]
-
-        # Loop over each of the layer outputs
-        for output in layer_outputs:
-            # Loop over each of the detections
-            for detection in output:
-
-                # Extract the class ID and confidence (i.e., probability) of the current object detection
-                scores = detection[5:]
-                class_id = np.argmax(scores)
-                confidence = scores[class_id]
-
-                # Filter out weak predictions by ensuring the detected probability is greater than the minimum probability
-                if confidence > 0.5:
-                    # Scale the bounding box coordinates back relative to the size of the image, keeping in mind that YOLO
-                    # actually returns the center (x, y)-coordinates of the bounding box followed by the boxes' width and height
-
-                    box = detection[0:4] * np.array([img_width, img_height, img_width, img_height])
-                    (center_x, center_y, det_width, det_height) = box.astype("int")
-
-                    # Use the center (x, y)-coordinates to derive the top and
-                    # and left corner of the bounding box
-                    x = int(center_x - (det_width / 2))
-                    y = int(center_y - (det_height / 2))
-
-                    # Update list of bounding box coordinates, confidences, and class IDs
-                    self.boxes.append([x, y, int(det_width), int(det_height)])
-                    self.confidences.append(float(confidence))
-                    self.class_ids.append(class_id)
-                    self.centers.append((center_x, center_y))
-
-    def _draw_boxes(self):
-        """
-        Filters out overlapping bounding boxes and draws the rest of them on the image
-        """
-        # Apply non-maxima suppression to suppress weak, overlapping bounding boxes
-        indices = cv.dnn.NMSBoxes(self.boxes, self.confidences, 0.5, 0.2)
-        centers_unsuppressed = self.centers
-        self.centers = []
-        res_image = self.image.copy()
-        target_index = -1
-
-        # Initialize target
-        self.identifier.set_target(self.target, self.boxes)
-
-        # Lock target
-        if len(self.boxes) != 0:
-            target_index = self.identifier.target_lock(res_image, 'ORB')
-
-
-        # Ensure at least one detection exists
-        if len(indices) > 0:
-
-            # Loop over the indexes we are keeping
-            for i in indices.flatten():
-                print(target_index, i, self.labels[self.class_ids[i]])
-                # Extract the bounding box coordinates
-                (x, y) = (self.boxes[i][0], self.boxes[i][1])
-                (w, h) = (self.boxes[i][2], self.boxes[i][3])
-                self.centers.append(centers_unsuppressed[i])
-
-                if i == target_index:
-                    tcenter_x, tcenter_y = centers_unsuppressed[i]
-                    cv.rectangle(self.image, (x, y), (x + w, y + h), (0, 0, 255), 2)
-                    text = "{} {:.4f}".format(self.labels[self.class_ids[i]], self.confidences[i])
-                    cv.putText(self.image, text, (x, y - 5), cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
-                    ut.draw_image(self.image, centers_unsuppressed[i][0], centers_unsuppressed[i][1], 5, (0, 0, 255))
-                    self.target_update_counter += 1
-                    print('Target update expected in: {} frames'.format(10 - self.target_update_counter))
-                    if self.target_update_counter >= 10 and self.prev_index == i:
-                        print('Updated target image')
-                        self.target.image = res_image  # TODO: Make a function for this
-                        self.target.update_data(self.boxes[i], (tcenter_x, tcenter_y))
-                        self.target_update_counter = 0
-                    self.prev_index = i
-                else:
-                    # Draw a bounding box rectangle and label on the image
-                    cv.rectangle(self.image, (x, y), (x + w, y + h), (255, 255, 255), 2)
-                    text = "{} {:.4f}".format(self.labels[self.class_ids[i]], self.confidences[i])
-                    cv.putText(self.image, text, (x, y - 5), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-                    ut.draw_image(self.image, centers_unsuppressed[i][0], centers_unsuppressed[i][1], 5, (255, 255, 255))
-
-
-    def _capture_target(self, i):
-        """
-        Capture an image of a detected object
-        Args:
-            i: Index
-        Returns: Cropped image
-        """
-        target_image = ut.snap_image(self.image, self.boxes[i][0], self.boxes[i][1], width=self.boxes[i][2], height=self.boxes[i][3])
-        # cv.imshow('Target', target_image)
-        return target_image
-
-
-    def detect(self, img, blob_size=(320, 320)):
-        """
-        Args:
-            img: Image in which object detection will perform on
-            blob_size: Shape of blob used in dnn.blobFromImage
-        Returns: Drawn image
-
-        """
-        # Initialize image
-        self.image = img
-
-        # Construct a blob from the input image and then perform a forward
-        # pass of the YOLO object detector, giving us our bounding boxes and
-        # associated probabilities
-        blob = cv.dnn.blobFromImage(self.image, 1 / 255.0, blob_size, swapRB=True, crop=False)
-        self.net.setInput(blob)
-
-        layer_outputs = self.net.forward(self.layer_names)
-
-        # Process the output layer data
-        self._extract_output_data(layer_outputs, self.image)
-
-        # Draw boxes
-        self._draw_boxes()
-
-        return self.image
-
-
-# ------------------------------------------------------------------------------------------------------------------------------ #
-
-# ----------------------------------------------- Homing Guidance -------------------------------------------------------------- #
-
-class Guide:
-
-    def __init__(self):
-        print('Guide')
+        # Update the clustering reference point with the current largest cluster centroid
+        centroid_x, centroid_y = 0, 0
+        for point in target_cluster:
+            centroid_x, centroid_y = centroid_x + int(point.pt[0]), centroid_y + int(point.pt[1])
+        if len(target_cluster):
+            centroid = int(centroid_x / len(target_cluster)), int(centroid_y / len(target_cluster))
+            self.reference_point = centroid
+            return centroid
+        return False
 
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
@@ -348,8 +142,10 @@ class HomingUI(ut.UI):
         self.bounding_box = []
         self.clicked = False
 
-
     def _get_mouse_coord(self, event, x, y, flags, param):
+        """
+        Gets mouse coordinates after clicking and appends said coordinates to bounding box variable
+        """
         if event == cv.EVENT_LBUTTONDOWN and not self.clicked:
             self.bounding_box.append((x, y))
             self.clicked = True
@@ -357,32 +153,43 @@ class HomingUI(ut.UI):
             print('Target captured. Press ESC')
             self.bounding_box.append((x, y))
 
-    def set_up_target(self, cap):
+    def set_up_target(self, cam_cap):
+        """
+        Args:
+            cam_cap: VideoCapture object
+        Returns: Image of captured object
+
+        """
         while True:
-            _, feed = cap.read()
+            _, feed = cam_cap.read()
             cv.imshow('Target Selection', feed)
             # Wait for ESC
-            if cv.waitKey(1) & 0XFF == 27:
-                cv.imwrite('../../datasets/testing/target.jpg', feed)
+            if cv.waitKey(1) & 0XFF == 27:  # Save image of target scene locally
+                cv.imwrite('app/datasets/targets/target.jpg', feed)
                 cv.destroyAllWindows()
                 break
 
+        # Update the target scene image to contain only the selected region
         cv.namedWindow('Select ROI')
         cv.setMouseCallback('Select ROI', self._get_mouse_coord)
+        target_frame = cv.imread('app/datasets/targets/target.jpg')
         while True:
             # Select target ROI
-            cv.imshow('Select ROI', cv.imread('../../datasets/testing/target.jpg'))
+            cv.imshow('Select ROI', target_frame)
             if cv.waitKey(1) == 27:
                 cv.destroyAllWindows()
                 break
 
-
+        # Store ROI coordinates
         x, y = self.bounding_box[0]
         w, h = self.bounding_box[1]
         w, h = w - x, h - y
-        return x, y, w, h
+
+        return target_frame[y: y + h, x: x + w]
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
+
+# -------------------------------------------------- Video Feed Setup --------------------------------------------------------- #
 
 
 class ThreadedCamera(object):
@@ -420,43 +227,66 @@ class ThreadedCamera(object):
                 cv.destroyAllWindows()
                 exit()
 
+# ------------------------------------------------------------------------------------------------------------------------------ #
 
-# ----------------------------------------------------- Main ------------------------------------------------------------------- #
+# ------------------------------------------------ Initialization -------------------------------------------------------------- #
 
-# Load labels
-labels_path = '../../datasets/models/coco.names'
-labels_stream = open(labels_path).read().strip().split("\n")
+def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='ORB', n_features=10000, nn_dist=50):
+    """
+    Args:
+        cam_URL: URL of IP or RTSP camera
+        camera_index: Index of webcam for VideoCapture object
+        feature_extraction_method: Selected feature extraction method. Can be 'SURF' or 'ORB'
+        n_features: Number of features to be extracted from scene
+        nn_dist: Minimum distance between keypoints for clustering algorithm
+    """
+    cap = None
 
-config_path = '../../datasets/models/yolov3/yolov3-tiny.cfg'
-weights_path = '../../datasets/models/yolov3/yolov3-tiny.weights'
+    # Initialize camera feed
+    if camera_index == -1 and cam_URL is None:
+        camera_index = 0
+        for i in range(0, 10):
+            cap = cv.VideoCapture(i)
+            if cap.isOpened():
+                camera_index = i
+                break
+    elif cam_URL is None:
+        cap = cv.VideoCapture(camera_index)
+    else:
+        camera_index = cam_URL
+        cap = cv.VideoCapture(camera_index)
 
-cam_URL = 'http://192.168.2.12:8080/video'
+    # Initialize UI object
+    ui = HomingUI()
 
-ui = HomingUI()
+    # Select target from video feed
+    target_frame = ui.set_up_target(cap)
+    cv.imshow('Cropped', target_frame)
+    cv.waitKey(0)
+    cap.release()
 
-camera_index = 0
-for i in range(1, 10):
-    cap = cv.VideoCapture(0)
-    if cap.isOpened():
-        camera_index = i
-        break
+    # Initialize threaded camera
+    threaded_cam = ThreadedCamera(camera_index)
 
-target_box = ui.set_up_target(cap)
-_, frame = cap.read()
-cv.imshow('Cropped', frame[target_box[1]:target_box[1]+target_box[3], target_box[0]: target_box[0] + target_box[2]])
-cv.waitKey(0)
-cap.release()
+    # Initialize target Identifier object
+    track = Tracker(target_frame, n_features, nn_dist)
 
-threaded_cam = ThreadedCamera(0)
-det = Detector(config_path, weights_path, labels_stream, target_box)
+    while True:
+        start = time.time()
 
-while True:
+        # Perform object detection
+        try:
+            # Track target from previously captured frame
+            res = track.track(threaded_cam.frame, feature_extraction_method)
+            if res:
+                res_frame = ut.draw_image(threaded_cam.frame, res[0], res[1], 5, (0, 0, 255))
+            else:
+                res_frame = threaded_cam.frame
+            # Display result
+            threaded_cam.show_frame(res_frame)
+            # print('Operations took {:2f}s'.format(time.time() - start))
 
-    # Perform object detection
-    try:
-        det_frame = det.detect(threaded_cam.frame, blob_size=(320, 320))
-        # Display result
-        threaded_cam.show_frame(det_frame)
-    except AttributeError:
-        pass
+        except AttributeError:
+            pass
 
+# ------------------------------------------------------------------------------------------------------------------------------ #
