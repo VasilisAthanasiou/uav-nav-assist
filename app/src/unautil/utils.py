@@ -48,12 +48,36 @@ def snap_image(img, top_x, top_y, dim=0, width=0, height=0):
         return img[top_y:top_y + height, top_x:top_x + width].copy()
 
 
-
 def compute_euclidean(centroid1, centroid2):
     return np.sqrt(np.square(centroid1[0] - centroid2[0]) + np.square(centroid1[1] - centroid2[1]))
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
+# -------------------------------------------------- Clustering ------------------------------------------------------------ #
+
+
+def fpnn(keypoints, reference_point, mdist=50):  # Fast Point oriented Nearest Neighbors
+
+    keypoints.sort(key=lambda x: compute_euclidean(x.pt, reference_point))
+    prev_keypoint = (0, 0)
+    clusters = []
+    cluster = []
+    for keypoint in keypoints:
+        if prev_keypoint != (0, 0):
+            if compute_euclidean(keypoint.pt, prev_keypoint) <= mdist:
+                cluster.append(keypoint)
+                prev_keypoint = keypoint.pt
+            else:
+                clusters.append(cluster)
+                prev_keypoint = keypoint.pt
+                cluster = [keypoint]
+        else:
+            prev_keypoint = keypoint.pt
+    clusters.append(cluster)
+
+    return clusters
+
+# ------------------------------------------------------------------------------------------------------------------------------ #
 
 # -------------------------------------------------- User Interface ------------------------------------------------------------ #
 
@@ -61,13 +85,13 @@ class UI:
 
     def __init__(self, method=''):
         self._method = method
-        self.cwd = '../datasets'
+        self.cwd = 'app/datasets'
 
     def experiment(self, method):
         """
 
         Args:
-            method: Selects the method to run. Can be = 'simulation', 'plot', 'write text'
+            method: Selects the method to run. Can be = 'simulation', 'plot', 'write-text'
         """
         self._method = method
         return self._get_method()
@@ -77,7 +101,7 @@ class UI:
         if self._method == 'simulation':
             self.cwd += '/travel-assist'
             return self._use_simulation()
-        elif (self._method == 'plot') or (self._method == 'write text'):
+        elif (self._method == 'plot') or (self._method == 'write-text'):
             self.cwd += '/travel-assist'
             return self._use_evaluation()
         elif self._method == 'guide':
