@@ -4,27 +4,11 @@ import app.src.unautil.utils as ut
 from threading import Thread
 import time
 
-# TODO: ADD COMMENTS AND DOCSTRINGS
-# -------------------------------------------------- Target Classes --------------------------------------------------------------- #
-
-class Target:
-    def __init__(self, bounding_box, centroid, image=None, target_id=0):
-        self.image = image
-
-
-
-# ------------------------------------------------------------------------------------------------------------------------------ #
-
-# -------------------------------------------------- Identifier ---------------------------------------------------------------- #
-
-
-class Identifier:
-    def __init__(self, target_image=None, n_features=100, hessian_thresh=100):
-        self.target_image = target_image
-        self.uav_frame = None
+# -------------------------------------------------- Feature Extractor ---------------------------------------------------------------- #
+class FeatureExtractor:
+    def __init__(self, n_features=10000, hessian_thresh=100):
         self.n_features = n_features
         self.hessian_thresh = hessian_thresh
-        self.reference_point = (0, 0)
 
     def _use_surf(self, image):
         """
@@ -44,7 +28,7 @@ class Identifier:
             image: Image that ORB will be applied to.
         Returns: Keypoints and descriptors
         """
-        orb = cv.ORB_create(self.n_features, 1.1, 10, 2)
+        orb = cv.ORB_create(self.n_features, 1.05, 20, 2)  # TODO: Read more about ORB and tweak parameters to better suit the problem
         keypoints = orb.detect(image)
         return orb.compute(image, keypoints)
 
@@ -54,7 +38,6 @@ class Identifier:
         Args:
             method: Method that will be called
             image: Image that the method will extract features from
-
         Returns: Keypoints and Descriptors
 
         """
@@ -65,14 +48,13 @@ class Identifier:
         else:
             print('No valid method selected')
 
-    def _compare_features(self, target_image, uav_image, method):
+    def match_features(self, target_image, uav_image, method):
         """
         Matches features from a pre-determined target with a UAV image
         Args:
-            target: Target object
+            target_image: Image of selected target
             uav_image: Image from video feed
             method: Method that will be used to extract features
-
         Returns: Target keypoints, UAV keypoints and a match object that associates them
         """
 
@@ -84,36 +66,49 @@ class Identifier:
         if target_descriptors.any() and uav_descriptors.any():
             matches = bf.match(target_descriptors, uav_descriptors)
 
-            # The matches with shorter distance are the ones we want.
-            matches = sorted(matches, key=lambda x: x.distance)
-
             return target_keypoints, uav_keypoints, matches
         return False, False, False
 
-    def target_lock(self, uav_image, method):
+# ------------------------------------------------------------------------------------------------------------------------------ #
+
+# ----------------------------------------------- Tracker --------------------------------------------------------------- #
+
+class Tracker:
+    def __init__(self, target_image=None, n_features=10000, hessian_thresh=100, nn_dist=50):
+        self.target_image = target_image
+        self.uav_image = None
+        self.feature_extractor = FeatureExtractor(n_features, hessian_thresh)
+        self.reference_point = (0, 0)
+        self.nn_dist = nn_dist
+
+    def track(self, uav_frame, method):
+        self.uav_image = uav_frame
+        target_keypoints, uav_keypoints, matches = self.feature_extractor.match_features(self.target_image, uav_frame, method)
+        if not matches:
+            return False
+        return self._target_lock(target_keypoints, uav_keypoints, matches, self.nn_dist)
+
+    def _target_lock(self, target_keypoints, uav_keypoints, matches, nn_dist):
         """
         Determines which of the current detections is the target
         Args:
-            uav_image: Image from video feed
-            method: Method used to extract features
-
+            matches:
+            uav_keypoints:
+            target_keypoints:
+            nn_dist: Minimum distance of nearest neighbor
         Returns: Index of target detection
         """
-        target_keypoints, uav_keypoints, matches = self._compare_features(self.target_image, uav_image, method)
-
-        if not matches:
-            return False
 
         # Add target keypoints into a list
         matched_keypoints = [uav_keypoints[match.trainIdx] for match in matches]  # Append the corresponding UAV keypoint object
 
         # Clustering algorithm
-        clusters = ut.fpnn(matched_keypoints, self.reference_point)
+        clusters = ut.fpnn(matched_keypoints, self.reference_point, nn_dist)
 
         clusters.sort(key=len)
         target_cluster = clusters[-1]
 
-        uav_keyp_img = uav_image.copy()
+        uav_keyp_img = self.uav_image.copy()
         color = (0, 0, 0)
         for cluster in clusters:
             if cluster != target_cluster:
@@ -124,8 +119,8 @@ class Identifier:
                 uav_keyp_img = cv.drawKeypoints(uav_keyp_img, cluster, outImage=None, color=(0, 0, 255))
 
         cv.imshow('UAV keypoints', uav_keyp_img)
-        # cv.imshow('Target Matches', cv.drawMatches(self.target.image, target_keypoints, uav_image, uav_keypoints, matches, outImg=None))
-        # Check which of the detection ROI's has the largest amount of keypoints associated with the target
+
+        # Update the clustering reference point with the current largest cluster centroid
         centroid_x, centroid_y = 0, 0
         for point in target_cluster:
             centroid_x, centroid_y = centroid_x + int(point.pt[0]), centroid_y + int(point.pt[1])
@@ -148,6 +143,9 @@ class HomingUI(ut.UI):
         self.clicked = False
 
     def _get_mouse_coord(self, event, x, y, flags, param):
+        """
+        Gets mouse coordinates after clicking and appends said coordinates to bounding box variable
+        """
         if event == cv.EVENT_LBUTTONDOWN and not self.clicked:
             self.bounding_box.append((x, y))
             self.clicked = True
@@ -156,18 +154,25 @@ class HomingUI(ut.UI):
             self.bounding_box.append((x, y))
 
     def set_up_target(self, cam_cap):
+        """
+        Args:
+            cam_cap: VideoCapture object
+        Returns: Image of captured object
+
+        """
         while True:
             _, feed = cam_cap.read()
             cv.imshow('Target Selection', feed)
             # Wait for ESC
-            if cv.waitKey(1) & 0XFF == 27:
-                cv.imwrite('../../datasets/testing/target.jpg', feed)
+            if cv.waitKey(1) & 0XFF == 27:  # Save image of target scene locally
+                cv.imwrite('app/datasets/targets/target.jpg', feed)
                 cv.destroyAllWindows()
                 break
 
+        # Update the target scene image to contain only the selected region
         cv.namedWindow('Select ROI')
         cv.setMouseCallback('Select ROI', self._get_mouse_coord)
-        target_frame = cv.imread('../../datasets/testing/target.jpg')
+        target_frame = cv.imread('app/datasets/targets/target.jpg')
         while True:
             # Select target ROI
             cv.imshow('Select ROI', target_frame)
@@ -175,6 +180,7 @@ class HomingUI(ut.UI):
                 cv.destroyAllWindows()
                 break
 
+        # Store ROI coordinates
         x, y = self.bounding_box[0]
         w, h = self.bounding_box[1]
         w, h = w - x, h - y
@@ -182,6 +188,8 @@ class HomingUI(ut.UI):
         return target_frame[y: y + h, x: x + w]
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
+
+# -------------------------------------------------- Video Feed Setup --------------------------------------------------------- #
 
 
 class ThreadedCamera(object):
@@ -219,42 +227,66 @@ class ThreadedCamera(object):
                 cv.destroyAllWindows()
                 exit()
 
+# ------------------------------------------------------------------------------------------------------------------------------ #
 
-# ----------------------------------------------------- Main ------------------------------------------------------------------- #
+# ------------------------------------------------ Initialization -------------------------------------------------------------- #
 
-cam_URL = 'http://192.168.2.12:8080/video'
-cap = None
+def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='ORB', n_features=10000, nn_dist=50):
+    """
+    Args:
+        cam_URL: URL of IP or RTSP camera
+        camera_index: Index of webcam for VideoCapture object
+        feature_extraction_method: Selected feature extraction method. Can be 'SURF' or 'ORB'
+        n_features: Number of features to be extracted from scene
+        nn_dist: Minimum distance between keypoints for clustering algorithm
+    """
+    cap = None
 
-camera_index = 0
-for i in range(0, 10):
-    cap = cv.VideoCapture(i)
-    if cap.isOpened():
-        camera_index = i
-        break
+    # Initialize camera feed
+    if camera_index == -1 and cam_URL is None:
+        camera_index = 0
+        for i in range(0, 10):
+            cap = cv.VideoCapture(i)
+            if cap.isOpened():
+                camera_index = i
+                break
+    elif cam_URL is None:
+        cap = cv.VideoCapture(camera_index)
+    else:
+        camera_index = cam_URL
+        cap = cv.VideoCapture(camera_index)
 
-ui = HomingUI()
+    # Initialize UI object
+    ui = HomingUI()
 
-target_frame = ui.set_up_target(cap)
-cv.imshow('Cropped', target_frame)
-cv.waitKey(0)
-cap.release()
+    # Select target from video feed
+    target_frame = ui.set_up_target(cap)
+    cv.imshow('Cropped', target_frame)
+    cv.waitKey(0)
+    cap.release()
 
-threaded_cam = ThreadedCamera(camera_index)
-ident = Identifier(target_frame, 50000)
+    # Initialize threaded camera
+    threaded_cam = ThreadedCamera(camera_index)
 
-while True:
-    start = time.time()
+    # Initialize target Identifier object
+    track = Tracker(target_frame, n_features, nn_dist)
 
-    # Perform object detection
-    try:
-        res = ident.target_lock(threaded_cam.frame, 'ORB')
-        if res:
-            res_frame = ut.draw_image(threaded_cam.frame, res[0], res[1], 5, (0, 0, 255))
-        else:
-            res_frame = threaded_cam.frame
-        # Display result
-        threaded_cam.show_frame(res_frame)
-        print('Operations took {:2f}s'.format(time.time() - start))
+    while True:
+        start = time.time()
 
-    except AttributeError:
-        pass
+        # Perform object detection
+        try:
+            # Track target from previously captured frame
+            res = track.track(threaded_cam.frame, feature_extraction_method)
+            if res:
+                res_frame = ut.draw_image(threaded_cam.frame, res[0], res[1], 5, (0, 0, 255))
+            else:
+                res_frame = threaded_cam.frame
+            # Display result
+            threaded_cam.show_frame(res_frame)
+            # print('Operations took {:2f}s'.format(time.time() - start))
+
+        except AttributeError:
+            pass
+
+# ------------------------------------------------------------------------------------------------------------------------------ #

@@ -1,14 +1,16 @@
-# Abstract
-This project's uses OpenCV's Template Matching to match one satellite image and one UAV image and find where the image taken by the drone is relative to the satellite image
+## Abstract
+This project uses OpenCV's Template Matching to match one satellite image and one UAV image and find where the image taken by the drone is relative to the satellite image
 
-Note : This program has been tested on a varriaty of images, containing different amount of features, noise and blur.
+Note : This program has been tested on a variety of images, containing different amount of features, noise and blur.
 
-# Project Guide
-- datasets : Contains a sources and a templates directory. Images from these directories can be linked inside main.py to produce experimentS. Sources contain "satellite" images taken from Google Maps, and some of them were edited in GIMP to add noise to them like clouds and Gaussian blur
-- report : Contains images, plots, and documents that describe the project's use case and analizes it's performance from data produced by src/create-dataset.py and evaluated in src/main.py
-- src : Contains the source code of the project. The main.py file reads two images and calls `find_target()`, which uses `cv2.matchTemplate()` to find where the template image is located on the source image. The sensed locations are stored in a variable, checked against a txt file located at datasets/templates/'template dataset name' and evaluated using the `evaluate()` method. Finally the results are plotted.
-The create-dataset.py file uses a sources, templates, and actual-location.txt path and crop the all the images in source into smaller 200x200 pixel images. While the images are being cropped, the top-left coordinate of the sub-image is written in the actual-location.txt file, so it can be used in `main.py::evaluate()`
+## Program Guide
+- Simulator : Runs a simulation of a UAV flight itinerary. Multiple 'satellite' images are given as input, as well as parameters for the UAV course and INS error. The program performs template matching on each image and computes the distance of the sensed location from the center of the image. The predicted distances are then transferred to the next image, and the process is repeated until there are no more images.
+- Evaluator : Runs the matching algorithm on multiple sub-regions of an image, on a set of images with various amounts of features. After the evaluation is complete, the experiment data can either be outputted into experiment-results.txt or be plotted using matplotlib.
 
+## Program structure
+Here is the program's class diagram
+
+![Class Diagram](uml-diagrams/travelassistuml.png)  
 # Project resources
 
 ### Digital Scene Matching Area Correlator
