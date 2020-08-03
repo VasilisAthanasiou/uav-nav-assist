@@ -28,11 +28,11 @@ class FeatureExtractor:
             image: Image that ORB will be applied to.
         Returns: Keypoints and descriptors
         """
-        orb = cv.ORB_create(self.n_features, 1.05, 20, 2)  # TODO: Read more about ORB and tweak parameters to better suit the problem
+        orb = cv.ORB_create(self.n_features, 1.005, 20, 2)  # TODO: Read more about ORB and tweak parameters to better suit the problem
         keypoints = orb.detect(image)
         return orb.compute(image, keypoints)
 
-    def _extract_features(self, method, image):
+    def extract_features(self, method, image):
         """
         Calls a method for feature extraction
         Args:
@@ -48,25 +48,24 @@ class FeatureExtractor:
         else:
             print('No valid method selected')
 
-    def match_features(self, target_image, uav_image, method):
+    def match_features(self, target_descriptors, uav_image, method):
         """
         Matches features from a pre-determined target with a UAV image
         Args:
-            target_image: Image of selected target
+            target_descriptors: Descriptor of selected target features
             uav_image: Image from video feed
             method: Method that will be used to extract features
         Returns: Target keypoints, UAV keypoints and a match object that associates them
         """
 
-        target_keypoints, target_descriptors = self._extract_features(method, target_image)
-        uav_keypoints, uav_descriptors = self._extract_features(method, uav_image)
+        uav_keypoints, uav_descriptors = self.extract_features(method, uav_image)
         bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
 
         # Perform the matching between the ORB descriptors of the training image and the test image
         if target_descriptors.any() and uav_descriptors.any():
             matches = bf.match(target_descriptors, uav_descriptors)
 
-            return target_keypoints, uav_keypoints, matches
+            return uav_keypoints, matches
         return False, False, False
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
@@ -80,13 +79,17 @@ class Tracker:
         self.feature_extractor = FeatureExtractor(n_features, hessian_thresh)
         self.reference_point = (0, 0)
         self.nn_dist = nn_dist
+        self.target_keypoints, self.target_descriptors = None, None
 
     def track(self, uav_frame, method):
         self.uav_image = uav_frame
-        target_keypoints, uav_keypoints, matches = self.feature_extractor.match_features(self.target_image, uav_frame, method)
+        uav_keypoints, matches = self.feature_extractor.match_features(self.target_descriptors, uav_frame, method)
         if not matches:
             return False
-        return self._target_lock(target_keypoints, uav_keypoints, matches, self.nn_dist)
+        return self._target_lock(self.target_keypoints, uav_keypoints, matches, self.nn_dist)
+
+    def initialize_target(self, method, target_image):
+        self.target_keypoints, self.target_descriptors = self.feature_extractor.extract_features(method, target_image)
 
     def _target_lock(self, target_keypoints, uav_keypoints, matches, nn_dist):
         """
@@ -244,14 +247,19 @@ def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='
 
     # Initialize camera feed
     if camera_index == -1 and cam_URL is None:
-        camera_index = 0
         for i in range(0, 10):
             cap = cv.VideoCapture(i)
             if cap.isOpened():
                 camera_index = i
                 break
     elif cam_URL is None:
-        cap = cv.VideoCapture(camera_index)
+        index_start = camera_index
+        print(index_start)
+        for i in range(index_start, 10):
+            cap = cv.VideoCapture(i)
+            if cap.isOpened():
+                camera_index = i
+                break
     else:
         camera_index = cam_URL
         cap = cv.VideoCapture(camera_index)
@@ -268,8 +276,9 @@ def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='
     # Initialize threaded camera
     threaded_cam = ThreadedCamera(camera_index)
 
-    # Initialize target Identifier object
+    # Initialize Tracker object
     track = Tracker(target_frame, n_features, nn_dist)
+    track.initialize_target(feature_extraction_method, target_frame)
 
     while True:
         start = time.time()
