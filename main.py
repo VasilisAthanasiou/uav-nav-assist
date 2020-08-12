@@ -22,9 +22,9 @@ if __name__ == '__main__':
                 sim.simulate('app/datasets/travel-assist/sources/source-diverse/3.cloudy-images',
                              'app/datasets/travel-assist/sources/source-diverse/2.blurred', True, 5)
         elif sys.argv[1] == 'homing':
-            cam_URL, camera_index, method, n_features, nn_dist = None, -1, 'ORB', 10000, 50
+            cam_URL, camera_index, method, n_features, nn_dist, video, target = None, -1, 'ORB', 10000, 50, None, None
             try:
-                opts, args = getopt.getopt(sys.argv[2:], 'c:i:m:n:d:')
+                opts, args = getopt.getopt(sys.argv[2:], 'c:i:m:n:d:v:t:')
             except IndexError:
                 pass
 
@@ -39,7 +39,11 @@ if __name__ == '__main__':
                     n_features = int(arg)
                 elif opt in ['-d']:
                     nn_dist = int(arg)
+                elif opt in ['-v']:
+                    video = arg
+                elif opt in ['-t']:
+                    target = arg
 
-            hg.initialize_homing(cam_URL, camera_index, method, n_features, nn_dist)
+            hg.initialize_homing(cam_URL, camera_index, method, n_features, nn_dist, video, target)
     except IndexError as e:
         print(e)
