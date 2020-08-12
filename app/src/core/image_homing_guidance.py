@@ -32,6 +32,15 @@ class FeatureExtractor:
         keypoints = orb.detect(image)
         return orb.compute(image, keypoints)
 
+    def _use_good_features(self, image):
+        img = np.mean(image, axis=2).astype(np.uint8)
+        
+        orb = cv.ORB_create(self.n_features, 1.005, 20, 2)  # TODO: Read more about ORB and tweak parameters to better suit the problem
+        features = cv.goodFeaturesToTrack(img, 10000, qualityLevel=0.01, minDistance=1)
+        keypoints = [cv.KeyPoint(x=f[0][0], y=f[0][1], _size=20) for f in features]
+        
+        return orb.compute(image, keypoints)
+
     def extract_features(self, method, image):
         """
         Calls a method for feature extraction
@@ -45,6 +54,8 @@ class FeatureExtractor:
             return self._use_surf(image)
         elif method == 'ORB':
             return self._use_orb(image)
+        elif method == 'GOOD':
+            return self._use_good_features(image)
         else:
             print('No valid method selected')
 
@@ -60,7 +71,6 @@ class FeatureExtractor:
 
         uav_keypoints, uav_descriptors = self.extract_features(method, uav_image)
         bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
-
         # Perform the matching between the ORB descriptors of the training image and the test image
         if target_descriptors.any() and uav_descriptors.any():
             matches = bf.match(target_descriptors, uav_descriptors)
@@ -277,8 +287,8 @@ def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='
     threaded_cam = ThreadedCamera(camera_index)
 
     # Initialize Tracker object
-    track = Tracker(target_frame, n_features, nn_dist)
-    track.initialize_target(feature_extraction_method, target_frame)
+    tracker = Tracker(target_frame, n_features, nn_dist)
+    tracker.initialize_target(feature_extraction_method, target_frame)
 
     while True:
         start = time.time()
@@ -286,7 +296,7 @@ def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='
         # Perform object detection
         try:
             # Track target from previously captured frame
-            res = track.track(threaded_cam.frame, feature_extraction_method)
+            res = tracker.track(threaded_cam.frame, feature_extraction_method)
             if res:
                 res_frame = ut.draw_image(threaded_cam.frame, res[0], res[1], 5, (0, 0, 255))
             else:
