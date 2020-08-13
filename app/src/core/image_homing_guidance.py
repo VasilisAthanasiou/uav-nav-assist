@@ -36,7 +36,7 @@ class FeatureExtractor:
     def _use_good_features(self, image):
         img = np.mean(image, axis=2).astype(np.uint8)
         
-        orb = cv.ORB_create(0, 1.005, 40, 6, WTA_K=3) 
+        orb = cv.ORB_create(0, 1.005, 40, 6, WTA_K=4) 
         features = cv.goodFeaturesToTrack(img, self.n_features, qualityLevel=0.01, minDistance=1)
         keypoints = [cv.KeyPoint(x=f[0][0], y=f[0][1], _size=40) for f in features]
         
