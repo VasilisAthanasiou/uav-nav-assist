@@ -5,6 +5,7 @@ from threading import Thread
 import time
 
 # -------------------------------------------------- Feature Extractor ---------------------------------------------------------------- #
+outstring = ''
 class FeatureExtractor:
     def __init__(self, n_features=10000, hessian_thresh=100):
         self.n_features = n_features
@@ -28,16 +29,16 @@ class FeatureExtractor:
             image: Image that ORB will be applied to.
         Returns: Keypoints and descriptors
         """
-        orb = cv.ORB_create(self.n_features, 1.005, 20, 2)  # TODO: Read more about ORB and tweak parameters to better suit the problem
+        orb = cv.ORB_create(self.n_features, 1.005, 20, 6, WTA_K=4)
         keypoints = orb.detect(image)
         return orb.compute(image, keypoints)
 
     def _use_good_features(self, image):
         img = np.mean(image, axis=2).astype(np.uint8)
         
-        orb = cv.ORB_create(0, 1.005, 20, 2)  # TODO: Read more about ORB and tweak parameters to better suit the problem
+        orb = cv.ORB_create(0, 1.005, 40, 6, WTA_K=3) 
         features = cv.goodFeaturesToTrack(img, self.n_features, qualityLevel=0.01, minDistance=1)
-        keypoints = [cv.KeyPoint(x=f[0][0], y=f[0][1], _size=20) for f in features]
+        keypoints = [cv.KeyPoint(x=f[0][0], y=f[0][1], _size=40) for f in features]
         
         return orb.compute(image, keypoints)
 
@@ -70,7 +71,7 @@ class FeatureExtractor:
         """
 
         uav_keypoints, uav_descriptors = self.extract_features(method, uav_image)
-        bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
+        bf = cv.BFMatcher(cv.NORM_HAMMING2, crossCheck=True)
         # Perform the matching between the ORB descriptors of the training image and the test image
         if target_descriptors.any() and uav_descriptors.any():
             matches = bf.match(target_descriptors, uav_descriptors)
@@ -83,7 +84,7 @@ class FeatureExtractor:
 # ----------------------------------------------- Tracker --------------------------------------------------------------- #
 
 class Tracker:
-    def __init__(self, target_image=None, n_features=10000, hessian_thresh=100, nn_dist=50):
+    def __init__(self, target_image=None, n_features=10000, nn_dist=50, hessian_thresh=100):
         self.target_image = target_image
         self.uav_image = None
         self.feature_extractor = FeatureExtractor(n_features, hessian_thresh)
@@ -111,15 +112,16 @@ class Tracker:
             nn_dist: Minimum distance of nearest neighbor
         Returns: Index of target detection
         """
-
+        global outstring
         # Add target keypoints into a list
         matched_keypoints = [uav_keypoints[match.trainIdx] for match in matches]  # Append the corresponding UAV keypoint object
-
         # Clustering algorithm
         clusters = ut.fpnn(matched_keypoints, self.reference_point, nn_dist)
 
         clusters.sort(key=len)
         target_cluster = clusters[-1]
+        
+        print('Cluster to matches ratio : {:.2f}'.format(len(target_cluster) / len(matched_keypoints)), end='\r')
 
         uav_keyp_img = self.uav_image.copy()
         color = (0, 0, 0)
@@ -276,6 +278,9 @@ def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='
         video: Pre-recorded video. Used for to get consistent results from experiments
         target: Specific image of the target. Used to get consistent results from experiments
     """
+    global outstring
+    outstring = ''
+    experiment_res = open('ex-res.txt', 'a')
     cap = None
 
     # Initialize camera feed
@@ -313,7 +318,7 @@ def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='
     else:
         target_frame = cv.imread(target)
         cv.imshow('Target', target_frame)
-        cv.waitKey(0)
+        cv.waitKey(1)
         cap.release()
 
     # Initialize threaded camera
@@ -327,6 +332,7 @@ def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='
     
     b_boxes = txt_to_boundingbox('app/datasets/flight-video/target-location.txt')
     correct_frames = 0
+    accuracy = 0
     
     while True:
         start = time.time()
@@ -350,14 +356,21 @@ def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='
             # print('Operations took {:2f}s'.format(time.time() - start))
             cv.imshow('frame', res_frame)
             cv.waitKey(1)
-            if(evaluate(b_boxes, res, n_frame)):
-                correct_frames += 1
-            n_frame += 1
-            accuracy = (correct_frames) / (n_frame)
-
-            print('Accuracy is at {:.2f}%'.format(100*accuracy), end='\r')
+            if video is not None:
+                if(evaluate(b_boxes, res, n_frame)):
+                    correct_frames += 1
+                n_frame += 1
+                accuracy = (correct_frames) / (n_frame)
+            
+                #print('Clustering distance {} '.format(nn_dist),end='', flush=True)
+                #print('Accuracy is at {:.2f}%.'.format(100*accuracy), end='\r')
         except:
             break
-
-    print(accuracy)
+    
+    outstring += 'Clustering distance {} '.format(nn_dist)
+    outstring += 'Accuracy is at {:.2f}%.\n'.format(100*accuracy)
+    
+    experiment_res.write(outstring)
+    experiment_res.close()
+    outstring = ''
 # ------------------------------------------------------------------------------------------------------------------------------ #
