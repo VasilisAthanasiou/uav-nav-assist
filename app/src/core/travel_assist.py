@@ -4,7 +4,7 @@ import numpy as np
 import os
 import imutils
 from matplotlib import pyplot as plt
-import app.src.unautil.utils as ut
+import src.unautil.utils as ut
 
 
 # ------------------------------------------------------- Image Processing --------------------------------------------------------------- #
@@ -247,7 +247,7 @@ class Evaluator:
     def _write_experiment(self):
         # Write the experiment results on a text file
         self._run_evaluation()
-        file = open("app/datasets/experiment-results.txt", "a")
+        file = open("datasets/experiment-results.txt", "a")
         file.write(
             "------------------------------ Results using {}deg rotation -------------------------------------\n{}".format(self.rotation,
                                                                                                                 self.result_txt))
@@ -430,9 +430,6 @@ class ImageReader:
 
         Args:
             directory: Images directory
-
-        Returns:
-
         """
         self.directory = directory
 

@@ -1,6 +1,6 @@
 import cv2 as cv
 import numpy as np
-import app.src.unautil.utils as ut
+import src.unautil.utils as ut
 from threading import Thread
 import time
 
@@ -29,14 +29,14 @@ class FeatureExtractor:
             image: Image that ORB will be applied to.
         Returns: Keypoints and descriptors
         """
-        orb = cv.ORB_create(self.n_features, 1.005, 20, 6, WTA_K=4)
+        orb = cv.ORB_create(self.n_features, 1.5, 12, 2, WTA_K=4)
         keypoints = orb.detect(image)
         return orb.compute(image, keypoints)
 
     def _use_good_features(self, image):
         img = np.mean(image, axis=2).astype(np.uint8)
         
-        orb = cv.ORB_create(0, 1.005, 40, 6, WTA_K=4) 
+        orb = cv.ORB_create(edgeThreshold=6, WTA_K=4) 
         features = cv.goodFeaturesToTrack(img, self.n_features, qualityLevel=0.01, minDistance=1)
         keypoints = [cv.KeyPoint(x=f[0][0], y=f[0][1], _size=40) for f in features]
         
@@ -267,7 +267,7 @@ def evaluate(bb_list, centroid, n_frame):
 
 # ------------------------------------------------ Initialization -------------------------------------------------------------- #
 
-def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='ORB', n_features=10000, nn_dist=50, video=None, target=None):
+def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='ORB', n_features=10000, nn_dist=100, video=None, target=None, write=False):
     """
     Args:
         cam_URL: URL of IP or RTSP camera
@@ -277,10 +277,10 @@ def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='
         nn_dist: Minimum distance between keypoints for clustering algorithm
         video: Pre-recorded video. Used for to get consistent results from experiments
         target: Specific image of the target. Used to get consistent results from experiments
+        write : Boolean value that specifies whether to write experiment data to file or not
     """
     global outstring
     outstring = ''
-    experiment_res = open('ex-res.txt', 'a')
     cap = None
 
     # Initialize camera feed
@@ -330,7 +330,7 @@ def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='
     tracker = Tracker(target_frame, n_features, nn_dist)
     tracker.initialize_target(feature_extraction_method, target_frame)
     
-    b_boxes = txt_to_boundingbox('app/datasets/flight-video/target-location.txt')
+    b_boxes = txt_to_boundingbox('datasets/flight-video/target-location.txt')
     correct_frames = 0
     accuracy = 0
     
@@ -362,15 +362,17 @@ def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='
                 n_frame += 1
                 accuracy = (correct_frames) / (n_frame)
             
-                #print('Clustering distance {} '.format(nn_dist),end='', flush=True)
-                #print('Accuracy is at {:.2f}%.'.format(100*accuracy), end='\r')
+                print('Clustering distance {} '.format(nn_dist),end='', flush=True)
+                print('Accuracy is at {:.2f}%.'.format(100*accuracy), end='\r')
         except:
             break
     
     outstring += 'Clustering distance {} '.format(nn_dist)
     outstring += 'Accuracy is at {:.2f}%.\n'.format(100*accuracy)
     
-    experiment_res.write(outstring)
-    experiment_res.close()
-    outstring = ''
+    if write:
+        experiment_res = open('../report/ex-res.txt', 'a')
+        experiment_res.write(outstring)
+        experiment_res.close()
+        outstring = ''
 # ------------------------------------------------------------------------------------------------------------------------------ #
