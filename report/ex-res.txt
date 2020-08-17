@@ -1,0 +1,87 @@
+-------- far.jpg - WTA_K = 4 - eT = 6 --------
+Clustering distance 50 Accuracy is at 96.36%.
+Clustering distance 100 Accuracy is at 97.17%.
+Clustering distance 150 Accuracy is at 97.17%.
+Clustering distance 200 Accuracy is at 96.36%.
+Clustering distance 250 Accuracy is at 95.82%.
+Clustering distance 300 Accuracy is at 93.66%.
+
+-------- far.jpg - WTA_K = 3 - eT = 6 --------
+Clustering distance 50 Accuracy is at 93.25%.
+Clustering distance 100 Accuracy is at 93.79%.
+Clustering distance 150 Accuracy is at 96.36%.
+Clustering distance 200 Accuracy is at 94.60%.
+Clustering distance 250 Accuracy is at 94.33%.
+Clustering distance 300 Accuracy is at 93.79%.
+
+-------- far.jpg - WTA_K = 2 - eT = 6 --------
+Clustering distance 50 Accuracy is at 80.43%.
+Clustering distance 100 Accuracy is at 89.07%.
+Clustering distance 150 Accuracy is at 89.34%.
+Clustering distance 200 Accuracy is at 89.61%.
+Clustering distance 250 Accuracy is at 88.80%.
+Clustering distance 300 Accuracy is at 89.74%.
+
+-------- far.jpg - WTA_K = 2 - eT = 12 -------
+Clustering distance 50 Accuracy is at 81.78%.
+Clustering distance 100 Accuracy is at 85.16%.
+Clustering distance 150 Accuracy is at 85.29%.
+Clustering distance 200 Accuracy is at 83.13%.
+Clustering distance 250 Accuracy is at 80.57%.
+Clustering distance 300 Accuracy is at 78.54%.
+
+-------- close.jpg - WTA_K = 4 - eT = 6 ------
+Clustering distance 50 Accuracy is at 87.99%.
+Clustering distance 100 Accuracy is at 95.28%.
+Clustering distance 150 Accuracy is at 74.09%.
+Clustering distance 200 Accuracy is at 69.50%.
+Clustering distance 250 Accuracy is at 64.91%.
+Clustering distance 300 Accuracy is at 62.89%.
+
+-------- close.jpg - WTA_K = 3 - eT = 6 ------
+Clustering distance 50 Accuracy is at 56.14%.
+Clustering distance 100 Accuracy is at 80.30%.
+Clustering distance 150 Accuracy is at 69.91%.
+Clustering distance 200 Accuracy is at 68.56%.
+Clustering distance 250 Accuracy is at 66.67%.
+Clustering distance 300 Accuracy is at 63.43%.
+
+-------- close.jpg - WTA_K = 2 - eT = 6 ------
+Clustering distance 50 Accuracy is at 55.87%.
+Clustering distance 100 Accuracy is at 33.87%.
+Clustering distance 150 Accuracy is at 28.61%.
+Clustering distance 200 Accuracy is at 55.33%.
+Clustering distance 250 Accuracy is at 60.19%.
+Clustering distance 300 Accuracy is at 55.74%.
+
+-------- close.jpg - WTA_K = 2 - eT = 12 ------
+Clustering distance 50 Accuracy is at 43.32%.
+Clustering distance 100 Accuracy is at 31.17%.
+Clustering distance 150 Accuracy is at 34.68%.
+Clustering distance 200 Accuracy is at 60.46%.
+Clustering distance 250 Accuracy is at 58.97%.
+Clustering distance 300 Accuracy is at 56.14%.
+
+-- far.jpg - WTA_K = 4 - eT = 12 oct = 6 - scaleFactor = 1.05--
+Clustering distance 50 Accuracy is at 96.49%.
+Clustering distance 100 Accuracy is at 96.22%.
+Clustering distance 150 Accuracy is at 96.90%.
+Clustering distance 200 Accuracy is at 94.87%.
+Clustering distance 250 Accuracy is at 92.44%.
+Clustering distance 300 Accuracy is at 88.26%.
+
+-- far.jpg - WTA_K = 4 - eT = 12 oct = 8 - scaleFactor = 1.005--
+Clustering distance 50 Accuracy is at 96.49%.
+Clustering distance 100 Accuracy is at 96.22%.
+Clustering distance 150 Accuracy is at 96.90%.
+Clustering distance 200 Accuracy is at 94.87%.
+Clustering distance 250 Accuracy is at 92.44%.
+Clustering distance 300 Accuracy is at 88.26%.
+
+-- close.jpg - WTA_K = 4 - eT = 6 oct = 4 - scaleFactor = 2--
+Clustering distance 50 Accuracy is at 0.00%.
+Clustering distance 100 Accuracy is at 0.00%.
+Clustering distance 150 Accuracy is at 0.00%.
+Clustering distance 200 Accuracy is at 0.00%.
+Clustering distance 250 Accuracy is at 0.00%.
+Clustering distance 300 Accuracy is at 0.00%.
