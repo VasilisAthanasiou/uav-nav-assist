@@ -78,10 +78,17 @@ Clustering distance 200 Accuracy is at 94.87%.
 Clustering distance 250 Accuracy is at 92.44%.
 Clustering distance 300 Accuracy is at 88.26%.
 
--- close.jpg - WTA_K = 4 - eT = 6 oct = 4 - scaleFactor = 2--
-Clustering distance 50 Accuracy is at 0.00%.
-Clustering distance 100 Accuracy is at 0.00%.
+--------- Clustering keypoint-centroid ------------------------
+far.jpg
+Clustering distance 50 Accuracy is at 3.91%.
+Clustering distance 100 Accuracy is at 99.73%.
+Clustering distance 150 Accuracy is at 99.73%.
+Clustering distance 200 Accuracy is at 96.63%.
+Clustering distance 250 Accuracy is at 87.72%.
+Clustering distance 300 Accuracy is at 75.30%.
+close.jpg
+Clustering distance 50 Accuracy is at 25.64%.
+Clustering distance 100 Accuracy is at 75.30%.
 Clustering distance 150 Accuracy is at 0.00%.
 Clustering distance 200 Accuracy is at 0.00%.
 Clustering distance 250 Accuracy is at 0.00%.
-Clustering distance 300 Accuracy is at 0.00%.

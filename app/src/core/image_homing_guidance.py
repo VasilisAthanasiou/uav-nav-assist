@@ -8,6 +8,12 @@ import time
 outstring = ''
 class FeatureExtractor:
     def __init__(self, n_features=10000, hessian_thresh=100):
+        """
+        Contains methods that can perform feature extraction using different algorithms
+        Args:
+            n_features: Number of features to be extracted
+            hessian_thresh: Hessian threshold parameter for SURF
+        """
         self.n_features = n_features
         self.hessian_thresh = hessian_thresh
 
@@ -15,7 +21,7 @@ class FeatureExtractor:
         """
         Use Speeded Up Robust Features
         Args:
-            image: Image that SURF will be applied to.
+            image: Image that SURF will be applied onto.
         Returns: Keypoints and descriptors
         """
         surf = cv.xfeatures2d_SURF()
@@ -26,19 +32,25 @@ class FeatureExtractor:
         """
         Use Oriented FAST and Rotated BRIEF
         Args:
-            image: Image that ORB will be applied to.
+            image: Image that ORB will be applied onto.
         Returns: Keypoints and descriptors
         """
-        orb = cv.ORB_create(self.n_features, 1.5, 12, 2, WTA_K=4)
+        orb = cv.ORB_create(self.n_features, 1.1, 12, 2, WTA_K=4)
         keypoints = orb.detect(image)
         return orb.compute(image, keypoints)
 
     def _use_good_features(self, image):
+        """
+        Uses the Shi-Tomashi corner detector for feature extraction and ORB's rBRIEF for feature description
+        Args:
+            image: Image that goodFeaturesToTrack() will be applied onto
+        Returns: Keypoints and descriptors
+        """
         img = np.mean(image, axis=2).astype(np.uint8)
         
         orb = cv.ORB_create(edgeThreshold=6, WTA_K=4) 
         features = cv.goodFeaturesToTrack(img, self.n_features, qualityLevel=0.01, minDistance=1)
-        keypoints = [cv.KeyPoint(x=f[0][0], y=f[0][1], _size=40) for f in features]
+        keypoints = [cv.KeyPoint(x=f[0][0], y=f[0][1], _size=40) for f in features]  # Create keypoints from goodFeaturesToTrack() object
         
         return orb.compute(image, keypoints)
 
@@ -51,7 +63,7 @@ class FeatureExtractor:
         Returns: Keypoints and Descriptors
 
         """
-        if method == 'SURF':  # Note that SURF in not free
+        if method == 'SURF':  # SURF won't work without a licence
             return self._use_surf(image)
         elif method == 'ORB':
             return self._use_orb(image)
@@ -69,27 +81,37 @@ class FeatureExtractor:
             method: Method that will be used to extract features
         Returns: Target keypoints, UAV keypoints and a match object that associates them
         """
+        uav_keypoints, uav_descriptors = self.extract_features(method, uav_image)  # Extract keypoints and descriptors
+        bf = cv.BFMatcher(cv.NORM_HAMMING2, crossCheck=True)  # Brute-Force matcher using the NORM_HAMMING2 distance for comparing 2 bit binary descriptors
 
-        uav_keypoints, uav_descriptors = self.extract_features(method, uav_image)
-        bf = cv.BFMatcher(cv.NORM_HAMMING2, crossCheck=True)
         # Perform the matching between the ORB descriptors of the training image and the test image
         if target_descriptors.any() and uav_descriptors.any():
             matches = bf.match(target_descriptors, uav_descriptors)
 
             return uav_keypoints, matches
-        return False, False, False
+        return False, False
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
 # ----------------------------------------------- Tracker --------------------------------------------------------------- #
 
 class Tracker:
-    def __init__(self, target_image=None, n_features=10000, nn_dist=50, hessian_thresh=100):
+    def __init__(self, target_image=None, n_features=10000, rclust_diam=50, hessian_thresh=100):
+        """
+        Contains methods that can be used to track an object using one image of said object
+        Args:
+            target_image: Image of target to be tracked
+            rclust_diam: Diameter of ROI for roiCluster()
+            feature_extractor: FeatureExtractor object
+            roi_centroid: Centroid of ROI
+            target_keypoints: Target keypoints
+            target_descriptors: Target descriptors
+        """
         self.target_image = target_image
         self.uav_image = None
         self.feature_extractor = FeatureExtractor(n_features, hessian_thresh)
-        self.reference_point = (0, 0)
-        self.nn_dist = nn_dist
+        self.roi_centroid = (0, 0)
+        self.rclust_diam = rclust_diam
         self.target_keypoints, self.target_descriptors = None, None
 
     def track(self, uav_frame, method):
@@ -97,40 +119,43 @@ class Tracker:
         uav_keypoints, matches = self.feature_extractor.match_features(self.target_descriptors, uav_frame, method)
         if not matches:
             return False
-        return self._target_lock(self.target_keypoints, uav_keypoints, matches, self.nn_dist)
+        return self._target_lock(self.target_keypoints, uav_keypoints, matches, self.rclust_diam)
 
     def initialize_target(self, method, target_image):
         self.target_keypoints, self.target_descriptors = self.feature_extractor.extract_features(method, target_image)
 
-    def _target_lock(self, target_keypoints, uav_keypoints, matches, nn_dist):
+    def _target_lock(self, target_keypoints, uav_keypoints, matches, rclust_diam):
         """
         Determines which of the current detections is the target
         Args:
-            matches:
-            uav_keypoints:
-            target_keypoints:
-            nn_dist: Minimum distance of nearest neighbor
+            matches: Matched feautures between two images
+            uav_keypoints: UAV (Video Feed) keypoints
+            target_keypoints: Target (image) keypoints
+            rclust_diam: Diameter of ROI for roiCluster()
         Returns: Index of target detection
         """
         global outstring
         # Add target keypoints into a list
         matched_keypoints = [uav_keypoints[match.trainIdx] for match in matches]  # Append the corresponding UAV keypoint object
         # Clustering algorithm
-        clusters = ut.fpnn(matched_keypoints, self.reference_point, nn_dist)
+        clusters = ut.roiCluster(matched_keypoints, self.roi_centroid, rclust_diam)  # Cluster features around rclust_diam from roi_centroid 
 
-        clusters.sort(key=len)
-        target_cluster = clusters[-1]
+        clusters.sort(key=len)  # Sort clusters
+        target_cluster = clusters[-1]  # Set the cluster with the most matched keypoints as the target cluster
         
         print('Cluster to matches ratio : {:.2f}'.format(len(target_cluster) / len(matched_keypoints)), end='\r')
 
         uav_keyp_img = self.uav_image.copy()
         color = (0, 0, 0)
+
+        # Draw target_cluster keypoints as red. The rest of the keypoints are drawn white
         for cluster in clusters:
             if cluster != target_cluster:
                 while color == (0, 0, 255) or color == (0, 0, 0):
                     color = (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))
                 uav_keyp_img = cv.drawKeypoints(uav_keyp_img, cluster, outImage=None, color=(255, 255, 255))
             else:
+        
                 uav_keyp_img = cv.drawKeypoints(uav_keyp_img, cluster, outImage=None, color=(0, 0, 255))
 
         cv.imshow('UAV keypoints', uav_keyp_img)
@@ -141,7 +166,7 @@ class Tracker:
             centroid_x, centroid_y = centroid_x + int(point.pt[0]), centroid_y + int(point.pt[1])
         if len(target_cluster):
             centroid = int(centroid_x / len(target_cluster)), int(centroid_y / len(target_cluster))
-            self.reference_point = centroid
+            self.roi_centroid = centroid
             return centroid
         return False
 
@@ -181,14 +206,14 @@ class HomingUI(ut.UI):
             cv.imshow('Target Selection', feed)
             # Wait for ESC
             if cv.waitKey(1) & 0XFF == 27:  # Save image of target scene locally
-                cv.imwrite('app/datasets/targets/target.jpg', feed)
+                cv.imwrite('datasets/targets/target.jpg', feed)
                 cv.destroyAllWindows()
                 break
 
         # Update the target scene image to contain only the selected region
         cv.namedWindow('Select ROI')
         cv.setMouseCallback('Select ROI', self.get_mouse_coord)
-        target_frame = cv.imread('app/datasets/targets/target.jpg')
+        target_frame = cv.imread('datasets/targets/target.jpg')
         while True:
             # Select target ROI
             cv.imshow('Select ROI', target_frame)

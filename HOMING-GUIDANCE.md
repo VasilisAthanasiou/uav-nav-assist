@@ -4,7 +4,7 @@
 **Image Oriented Homing Guidance** is a process that guides a UAV to a chosen target.
 
 ## Program guide:
-- Identifier : Is used to identify and track an object from a given image. This is accomplished by first extracting and matching features from the target image and the video feed, using OpenCV's [ORB](https://medium.com/data-breach/introduction-to-orb-oriented-fast-and-rotated-brief-4220e8ec40cf) feature matching algorithm and then performing clustering on the matched features, in order to select the cluster with the largest number of matched features. The centroid of the selected cluster is the point towards which the UAV must orient it self to.    
+- Tracker : Is used to identify and track an object from a given image. This is accomplished by first extracting and matching features from the target image and the video feed, using OpenCV's [ORB](https://medium.com/data-breach/introduction-to-orb-oriented-fast-and-rotated-brief-4220e8ec40cf) feature matching algorithm and then performing clustering on the matched features, in order to select the cluster with the largest number of matched features. The centroid of the selected cluster is the point towards which the UAV must orient it self to.    
 
 ## Project resources
 
