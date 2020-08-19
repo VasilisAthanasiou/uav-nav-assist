@@ -22,9 +22,9 @@ if __name__ == '__main__':
                              'datasets/travel-assist/sources/source-diverse/2.blurred', True, 5)
         elif sys.argv[1] == 'homing':
             import src.core.image_homing_guidance as hg
-            cam_URL, camera_index, method, n_features, nn_dist, video, target, write = None, -1, 'ORB', 10000, 100, None, None, False
+            cam_URL, camera_index, method, n_features, nn_dist, video, target, write, clustering_method = None, -1, 'ORB', 10000, 100, None, None, False, 'RoiCluster'
             try:
-                opts, args = getopt.getopt(sys.argv[2:], 'c:i:m:n:d:v:t:w:')
+                opts, args = getopt.getopt(sys.argv[2:], 'c:i:m:n:d:v:t:w:k:')
             except IndexError:
                 pass
 
@@ -43,9 +43,12 @@ if __name__ == '__main__':
                     video = arg
                 elif opt in ['-t']:
                     target = arg
+                elif opt in ['-k']:
+                    print(arg)
+                    clustering_method = arg
                 elif opt in ['-w'] and arg=='y' or arg=='yes' or arg=='Y' or arg=='Yes':
                     write = True
 
-            hg.initialize_homing(cam_URL, camera_index, method, n_features, nn_dist, video, target, write)
+            hg.initialize_homing(cam_URL, camera_index, method, n_features, nn_dist, video, target, write, clustering_method)
     except IndexError as e:
         print(e)

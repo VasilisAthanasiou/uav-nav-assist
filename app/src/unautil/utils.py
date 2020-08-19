@@ -1,5 +1,6 @@
 import cv2 as cv
 import numpy as np
+from sklearn.cluster import MeanShift
 
 
 # -------------------------------------------------- Util Methods -------------------------------------------------------------- #
@@ -54,34 +55,55 @@ def compute_euclidean(centroid1, centroid2):
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
 # -------------------------------------------------- Clustering ------------------------------------------------------------ #
+class Clustering:
+    def __init__(self, method, diam=100, bandwidth=50):
+        self.diam = diam
+        self.bandwidth = bandwidth
+        self.method = method
 
-
-def roiCluster(keypoints, roi_centroid, diam=100):  # Fast Point oriented Nearest Neighbors
-    """
-    Clusters every point in a region.
-    Args:
-        keypoints: Keypoints to be clustered
-        roi_centroid: Center of region of interest
-        diam: Diameter of roi
-    """
-    keypoints.sort(key=lambda x: compute_euclidean(x.pt, roi_centroid))  # Sort every keypoint by their distance from the roi_centroid
-    prev_keypoint = (0, 0)
-    clusters = []
-    cluster = []
-    for keypoint in keypoints:  # For every keypoint
-        if prev_keypoint != (0, 0):  # If this isn't the first keypoint
-            if compute_euclidean(keypoint.pt, prev_keypoint) <= diam:  # If the distance between two keypoints is greater than diam
-                cluster.append(keypoint)  # Insert keypoint into cluster
-                prev_keypoint = keypoint.pt 
-            else:
-                clusters.append(cluster)  # Insert current cluster to cluster list
-                prev_keypoint = keypoint.pt  
-                cluster = [keypoint]  # Initialize new cluster
+    def compute(self, keypoints, roi_centroid=(0,0)):
+        if self.method == 'MeanShift':
+            return self._use_meanShift(keypoints)
+        elif self.method == 'RoiCluster':
+            return self._use_roiCluster(keypoints, roi_centroid)
         else:
-            prev_keypoint = keypoint.pt
-    clusters.append(cluster)
+            print('Please select a valid clustering method')
+            exit()
 
-    return clusters
+    def _use_meanShift(self,keypoints):
+
+        clustering = MeanShift(bandwidth=self.bandwidth, bin_seeding=True, max_iter=50).fit(np.array([keypoint.pt for keypoint in keypoints]))
+        clusters = [[] for _ in clustering.labels_]
+        for i in range(len(keypoints)):
+             clusters[clustering.labels_[i]].append(keypoints[i])
+        
+        return clusters
+
+    def _use_roiCluster(self, keypoints, roi_centroid):  # Fast Point oriented Nearest Neighbors
+        """
+        Clusters every point in a region.
+        Args:
+            keypoints: Keypoints to be clustered
+            roi_centroid: Center of region of interest
+        """
+        keypoints.sort(key=lambda x: compute_euclidean(x.pt, roi_centroid))  # Sort every keypoint by their distance from the roi_centroid
+        prev_keypoint = (0, 0)
+        clusters = []
+        cluster = []
+        for keypoint in keypoints:  # For every keypoint
+            if prev_keypoint != (0, 0):  # If this isn't the first keypoint
+                if compute_euclidean(keypoint.pt, prev_keypoint) <= self.diam:  # If the distance between two keypoints is greater than diam
+                    cluster.append(keypoint)  # Insert keypoint into cluster
+                    prev_keypoint = keypoint.pt 
+                else:
+                    clusters.append(cluster)  # Insert current cluster to cluster list
+                    prev_keypoint = keypoint.pt  
+                    cluster = [keypoint]  # Initialize new cluster
+            else:
+                prev_keypoint = keypoint.pt
+        clusters.append(cluster)
+
+        return clusters
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
 
