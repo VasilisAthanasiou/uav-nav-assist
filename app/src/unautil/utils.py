@@ -56,21 +56,27 @@ def compute_euclidean(centroid1, centroid2):
 # -------------------------------------------------- Clustering ------------------------------------------------------------ #
 
 
-def fpnn(keypoints, reference_point, mdist=50):  # Fast Point oriented Nearest Neighbors
-
-    keypoints.sort(key=lambda x: compute_euclidean(x.pt, reference_point))
+def roiCluster(keypoints, roi_centroid, diam=100):  # Fast Point oriented Nearest Neighbors
+    """
+    Clusters every point in a region.
+    Args:
+        keypoints: Keypoints to be clustered
+        roi_centroid: Center of region of interest
+        diam: Diameter of roi
+    """
+    keypoints.sort(key=lambda x: compute_euclidean(x.pt, roi_centroid))  # Sort every keypoint by their distance from the roi_centroid
     prev_keypoint = (0, 0)
     clusters = []
     cluster = []
-    for keypoint in keypoints:
-        if prev_keypoint != (0, 0):
-            if compute_euclidean(keypoint.pt, prev_keypoint) <= mdist:
-                cluster.append(keypoint)
-                prev_keypoint = keypoint.pt
+    for keypoint in keypoints:  # For every keypoint
+        if prev_keypoint != (0, 0):  # If this isn't the first keypoint
+            if compute_euclidean(keypoint.pt, prev_keypoint) <= diam:  # If the distance between two keypoints is greater than diam
+                cluster.append(keypoint)  # Insert keypoint into cluster
+                prev_keypoint = keypoint.pt 
             else:
-                clusters.append(cluster)
-                prev_keypoint = keypoint.pt
-                cluster = [keypoint]
+                clusters.append(cluster)  # Insert current cluster to cluster list
+                prev_keypoint = keypoint.pt  
+                cluster = [keypoint]  # Initialize new cluster
         else:
             prev_keypoint = keypoint.pt
     clusters.append(cluster)
@@ -85,7 +91,7 @@ class UI:
 
     def __init__(self, method=''):
         self._method = method
-        self.cwd = 'app/datasets'
+        self.cwd = 'datasets'
 
     def experiment(self, method):
         """

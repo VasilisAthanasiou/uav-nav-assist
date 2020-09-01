@@ -1,3 +1,38 @@
 @startuml
 
+class HomingUI{
+    +set_up_target() : Void
+    -get_mouse_coord() : Method
+    --
+    +bounding_box : List[Tuple(Int, Int)]
+    +clicked : Boolean
+
+}
+
+class Tracker{
+    +track() : Mat
+    -target_lock() : Tuple(Int, Int) | Boolean
+    --
+    +target_image : Mat
+    +uav_image : Mat
+    +feature_extractor : FeatureExtractor
+    +reference_point : Tuple(Int, Int)
+    +nn_dist : Int
+
+}
+
+class FeatureExtractor{
+    -use_surf() : Tuple(List[cv::KeyPoint], List[cv::OutPutArray])
+    -use_orb() : Tuple(List[cv::KeyPoint], List[cv::OutPutArray])
+    -extract_features() : Tuple(List[cv::KeyPoint], List[cv::OutPutArray])
+    +match_features() : Tuple(List[cv::KeyPoint], List[cv::OutPutArray], List[cv::DMatch])
+    --
+    +n_features : Int
+    +hessian_thresh : Int
+
+}
+
+Tracker "1" *--- FeatureExtractor
+
+
 @enduml

@@ -1,36 +1,27 @@
 import cv2 as cv
 import numpy as np
-import app.src.unautil.utils as ut
+import src.unautil.utils as ut
 from threading import Thread
 import time
 
-# TODO: ADD COMMENTS AND DOCSTRINGS
-# -------------------------------------------------- Target Classes --------------------------------------------------------------- #
-
-class Target:
-    def __init__(self, bounding_box, centroid, image=None, target_id=0):
-        self.image = image
-
-
-
-# ------------------------------------------------------------------------------------------------------------------------------ #
-
-# -------------------------------------------------- Identifier ---------------------------------------------------------------- #
-
-
-class Identifier:
-    def __init__(self, target_image=None, n_features=100, hessian_thresh=100):
-        self.target_image = target_image
-        self.uav_frame = None
+# -------------------------------------------------- Feature Extractor ---------------------------------------------------------------- #
+outstring = ''
+class FeatureExtractor:
+    def __init__(self, n_features=10000, hessian_thresh=100):
+        """
+        Contains methods that can perform feature extraction using different algorithms
+        Args:
+            n_features: Number of features to be extracted
+            hessian_thresh: Hessian threshold parameter for SURF
+        """
         self.n_features = n_features
         self.hessian_thresh = hessian_thresh
-        self.reference_point = (0, 0)
 
     def _use_surf(self, image):
         """
         Use Speeded Up Robust Features
         Args:
-            image: Image that SURF will be applied to.
+            image: Image that SURF will be applied onto.
         Returns: Keypoints and descriptors
         """
         surf = cv.xfeatures2d_SURF()
@@ -41,97 +32,141 @@ class Identifier:
         """
         Use Oriented FAST and Rotated BRIEF
         Args:
-            image: Image that ORB will be applied to.
+            image: Image that ORB will be applied onto.
         Returns: Keypoints and descriptors
         """
-        orb = cv.ORB_create(self.n_features, 1.1, 10, 2)
+        orb = cv.ORB_create(self.n_features, 1.1, 12, 2, WTA_K=4)
         keypoints = orb.detect(image)
         return orb.compute(image, keypoints)
 
-    def _extract_features(self, method, image):
+    def _use_good_features(self, image):
+        """
+        Uses the Shi-Tomashi corner detector for feature extraction and ORB's rBRIEF for feature description
+        Args:
+            image: Image that goodFeaturesToTrack() will be applied onto
+        Returns: Keypoints and descriptors
+        """
+        img = np.mean(image, axis=2).astype(np.uint8)
+        
+        orb = cv.ORB_create(edgeThreshold=6, WTA_K=4) 
+        features = cv.goodFeaturesToTrack(img, self.n_features, qualityLevel=0.01, minDistance=1)
+        keypoints = [cv.KeyPoint(x=f[0][0], y=f[0][1], _size=40) for f in features]  # Create keypoints from goodFeaturesToTrack() object
+        
+        return orb.compute(image, keypoints)
+
+    def extract_features(self, method, image):
         """
         Calls a method for feature extraction
         Args:
             method: Method that will be called
             image: Image that the method will extract features from
-
         Returns: Keypoints and Descriptors
 
         """
-        if method == 'SURF':  # Note that SURF in not free
+        if method == 'SURF':  # SURF won't work without a licence
             return self._use_surf(image)
         elif method == 'ORB':
             return self._use_orb(image)
+        elif method == 'GOOD':
+            return self._use_good_features(image)
         else:
             print('No valid method selected')
 
-    def _compare_features(self, target_image, uav_image, method):
+    def match_features(self, target_descriptors, uav_image, method):
         """
         Matches features from a pre-determined target with a UAV image
         Args:
-            target: Target object
+            target_descriptors: Descriptor of selected target features
             uav_image: Image from video feed
             method: Method that will be used to extract features
-
         Returns: Target keypoints, UAV keypoints and a match object that associates them
         """
-
-        target_keypoints, target_descriptors = self._extract_features(method, target_image)
-        uav_keypoints, uav_descriptors = self._extract_features(method, uav_image)
-        bf = cv.BFMatcher(cv.NORM_HAMMING, crossCheck=True)
+        uav_keypoints, uav_descriptors = self.extract_features(method, uav_image)  # Extract keypoints and descriptors
+        bf = cv.BFMatcher(cv.NORM_HAMMING2, crossCheck=True)  # Brute-Force matcher using the NORM_HAMMING2 distance for comparing 2 bit binary descriptors
 
         # Perform the matching between the ORB descriptors of the training image and the test image
         if target_descriptors.any() and uav_descriptors.any():
             matches = bf.match(target_descriptors, uav_descriptors)
 
-            # The matches with shorter distance are the ones we want.
-            matches = sorted(matches, key=lambda x: x.distance)
+            return uav_keypoints, matches
+        return False, False
 
-            return target_keypoints, uav_keypoints, matches
-        return False, False, False
+# ------------------------------------------------------------------------------------------------------------------------------ #
 
-    def target_lock(self, uav_image, method):
+# ----------------------------------------------- Tracker --------------------------------------------------------------- #
+
+class Tracker:
+    def __init__(self, target_image=None, n_features=10000, rclust_diam=50, hessian_thresh=100):
+        """
+        Contains methods that can be used to track an object using one image of said object
+        Args:
+            target_image: Image of target to be tracked
+            rclust_diam: Diameter of ROI for roiCluster()
+            feature_extractor: FeatureExtractor object
+            roi_centroid: Centroid of ROI
+            target_keypoints: Target keypoints
+            target_descriptors: Target descriptors
+        """
+        self.target_image = target_image
+        self.uav_image = None
+        self.feature_extractor = FeatureExtractor(n_features, hessian_thresh)
+        self.roi_centroid = (0, 0)
+        self.rclust_diam = rclust_diam
+        self.target_keypoints, self.target_descriptors = None, None
+
+    def track(self, uav_frame, method):
+        self.uav_image = uav_frame
+        uav_keypoints, matches = self.feature_extractor.match_features(self.target_descriptors, uav_frame, method)
+        if not matches:
+            return False
+        return self._target_lock(self.target_keypoints, uav_keypoints, matches, self.rclust_diam)
+
+    def initialize_target(self, method, target_image):
+        self.target_keypoints, self.target_descriptors = self.feature_extractor.extract_features(method, target_image)
+
+    def _target_lock(self, target_keypoints, uav_keypoints, matches, rclust_diam):
         """
         Determines which of the current detections is the target
         Args:
-            uav_image: Image from video feed
-            method: Method used to extract features
-
+            matches: Matched feautures between two images
+            uav_keypoints: UAV (Video Feed) keypoints
+            target_keypoints: Target (image) keypoints
+            rclust_diam: Diameter of ROI for roiCluster()
         Returns: Index of target detection
         """
-        target_keypoints, uav_keypoints, matches = self._compare_features(self.target_image, uav_image, method)
-
-        if not matches:
-            return False
-
+        global outstring
         # Add target keypoints into a list
         matched_keypoints = [uav_keypoints[match.trainIdx] for match in matches]  # Append the corresponding UAV keypoint object
-
         # Clustering algorithm
-        clusters = ut.fpnn(matched_keypoints, self.reference_point)
+        clusters = ut.roiCluster(matched_keypoints, self.roi_centroid, rclust_diam)  # Cluster features around rclust_diam from roi_centroid 
 
-        clusters.sort(key=len)
-        target_cluster = clusters[-1]
+        clusters.sort(key=len)  # Sort clusters
+        target_cluster = clusters[-1]  # Set the cluster with the most matched keypoints as the target cluster
+        
+        print('Cluster to matches ratio : {:.2f}'.format(len(target_cluster) / len(matched_keypoints)), end='\r')
 
-        uav_keyp_img = uav_image.copy()
+        uav_keyp_img = self.uav_image.copy()
         color = (0, 0, 0)
+
+        # Draw target_cluster keypoints as red. The rest of the keypoints are drawn white
         for cluster in clusters:
             if cluster != target_cluster:
                 while color == (0, 0, 255) or color == (0, 0, 0):
                     color = (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))
                 uav_keyp_img = cv.drawKeypoints(uav_keyp_img, cluster, outImage=None, color=(255, 255, 255))
             else:
+        
                 uav_keyp_img = cv.drawKeypoints(uav_keyp_img, cluster, outImage=None, color=(0, 0, 255))
 
         cv.imshow('UAV keypoints', uav_keyp_img)
-        # cv.imshow('Target Matches', cv.drawMatches(self.target.image, target_keypoints, uav_image, uav_keypoints, matches, outImg=None))
-        # Check which of the detection ROI's has the largest amount of keypoints associated with the target
+
+        # Update the clustering reference point with the current largest cluster centroid
         centroid_x, centroid_y = 0, 0
         for point in target_cluster:
             centroid_x, centroid_y = centroid_x + int(point.pt[0]), centroid_y + int(point.pt[1])
         if len(target_cluster):
             centroid = int(centroid_x / len(target_cluster)), int(centroid_y / len(target_cluster))
-            self.reference_point = centroid
+            self.roi_centroid = centroid
             return centroid
         return False
 
@@ -147,27 +182,38 @@ class HomingUI(ut.UI):
         self.bounding_box = []
         self.clicked = False
 
-    def _get_mouse_coord(self, event, x, y, flags, param):
+    def get_mouse_coord(self, event, x, y, flags, param):
+        """
+        Gets mouse coordinates after clicking and appends said coordinates to bounding box variable
+        """
         if event == cv.EVENT_LBUTTONDOWN and not self.clicked:
             self.bounding_box.append((x, y))
             self.clicked = True
         elif event == cv.EVENT_LBUTTONDOWN and self.clicked:
             print('Target captured. Press ESC')
             self.bounding_box.append((x, y))
+        return self.bounding_box
 
     def set_up_target(self, cam_cap):
+        """
+        Args:
+            cam_cap: VideoCapture object
+        Returns: Image of captured object
+
+        """
         while True:
             _, feed = cam_cap.read()
             cv.imshow('Target Selection', feed)
             # Wait for ESC
-            if cv.waitKey(1) & 0XFF == 27:
-                cv.imwrite('../../datasets/testing/target.jpg', feed)
+            if cv.waitKey(1) & 0XFF == 27:  # Save image of target scene locally
+                cv.imwrite('datasets/targets/target.jpg', feed)
                 cv.destroyAllWindows()
                 break
 
+        # Update the target scene image to contain only the selected region
         cv.namedWindow('Select ROI')
-        cv.setMouseCallback('Select ROI', self._get_mouse_coord)
-        target_frame = cv.imread('../../datasets/testing/target.jpg')
+        cv.setMouseCallback('Select ROI', self.get_mouse_coord)
+        target_frame = cv.imread('datasets/targets/target.jpg')
         while True:
             # Select target ROI
             cv.imshow('Select ROI', target_frame)
@@ -175,6 +221,7 @@ class HomingUI(ut.UI):
                 cv.destroyAllWindows()
                 break
 
+        # Store ROI coordinates
         x, y = self.bounding_box[0]
         w, h = self.bounding_box[1]
         w, h = w - x, h - y
@@ -182,6 +229,8 @@ class HomingUI(ut.UI):
         return target_frame[y: y + h, x: x + w]
 
 # ------------------------------------------------------------------------------------------------------------------------------ #
+
+# -------------------------------------------------- Video Feed Setup --------------------------------------------------------- #
 
 
 class ThreadedCamera(object):
@@ -193,11 +242,13 @@ class ThreadedCamera(object):
         # X = desired FPS
         self.FPS = 1 / 30
         self.FPS_MS = int(self.FPS * 1000)
+        self.n_frame = 0
 
         # Start frame retrieval thread
         self.thread = Thread(target=self.update, args=())
         self.thread.daemon = True
         self.thread.start()
+      
 
     def update(self):
         while True:
@@ -208,53 +259,145 @@ class ThreadedCamera(object):
     def show_frame(self, frame=None):
         if frame is not None:
             cv.imshow('frame', frame)
+            self.n_frame += 1
             if cv.waitKey(self.FPS_MS) & 0XFF == 27:
                 self.cap.release()
                 cv.destroyAllWindows()
                 exit()
         else:
             cv.imshow('frame', self.frame)
+            self.n_frame += 1
             if cv.waitKey(self.FPS_MS) & 0XFF == 27:
                 self.cap.release()
                 cv.destroyAllWindows()
                 exit()
 
+# ------------------------------------------------------------------------------------------------------------------------------ #
 
-# ----------------------------------------------------- Main ------------------------------------------------------------------- #
+# ------------------------------------------------ Experimentation ------------------------------------------------------------- #
 
-cam_URL = 'http://192.168.2.12:8080/video'
-cap = None
+def txt_to_boundingbox(bb_file):
+    lines = open(bb_file, 'r').readlines()
+    bounding_boxes = []
+    for line in lines:
+        bounding_boxes.append([(int(line[2:5]), int(line[7:10])), (int(line[14:17]), int(line[19:22]))])  # Please don't try this at home
+    
+    return bounding_boxes
 
-camera_index = 0
-for i in range(0, 10):
-    cap = cv.VideoCapture(i)
-    if cap.isOpened():
-        camera_index = i
-        break
+def evaluate(bb_list, centroid, n_frame):
+    return (bb_list[n_frame][0][0] <= centroid[0] <= bb_list[n_frame][1][0]) and (bb_list[n_frame][0][1] <= centroid[1] <= bb_list[n_frame][1][1])
+    
 
-ui = HomingUI()
+# ------------------------------------------------------------------------------------------------------------------------------ #
 
-target_frame = ui.set_up_target(cap)
-cv.imshow('Cropped', target_frame)
-cv.waitKey(0)
-cap.release()
+# ------------------------------------------------ Initialization -------------------------------------------------------------- #
 
-threaded_cam = ThreadedCamera(camera_index)
-ident = Identifier(target_frame, 50000)
+def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='ORB', n_features=10000, nn_dist=100, video=None, target=None, write=False):
+    """
+    Args:
+        cam_URL: URL of IP or RTSP camera
+        camera_index: Index of webcam for VideoCapture object
+        feature_extraction_method: Selected feature extraction method. Can be 'SURF' or 'ORB'
+        n_features: Number of features to be extracted from scene
+        nn_dist: Minimum distance between keypoints for clustering algorithm
+        video: Pre-recorded video. Used for to get consistent results from experiments
+        target: Specific image of the target. Used to get consistent results from experiments
+        write : Boolean value that specifies whether to write experiment data to file or not
+    """
+    global outstring
+    outstring = ''
+    cap = None
 
-while True:
-    start = time.time()
+    # Initialize camera feed
+    if video is not None:
+        cap = cv.VideoCapture(video)
+        camera_index = video
+    elif camera_index == -1 and cam_URL is None:
+        for i in range(0, 10):
+            cap = cv.VideoCapture(i)
+            if cap.isOpened():
+                camera_index = i
+                break
+    elif cam_URL is None:
+        index_start = camera_index
+        print(index_start)
+        for i in range(index_start, 10):
+            cap = cv.VideoCapture(i)
+            if cap.isOpened():
+                camera_index = i
+                break
+    else:
+        camera_index = cam_URL
+        cap = cv.VideoCapture(camera_index)
 
-    # Perform object detection
-    try:
-        res = ident.target_lock(threaded_cam.frame, 'ORB')
-        if res:
-            res_frame = ut.draw_image(threaded_cam.frame, res[0], res[1], 5, (0, 0, 255))
-        else:
-            res_frame = threaded_cam.frame
-        # Display result
-        threaded_cam.show_frame(res_frame)
-        print('Operations took {:2f}s'.format(time.time() - start))
+    # Initialize UI object
+    ui = HomingUI()
 
-    except AttributeError:
-        pass
+    # Select target from video feed or set pre-captured target  
+    if target is None:
+    
+        target_frame = ui.set_up_target(cap)
+        cv.imshow('Cropped', target_frame)
+        cv.waitKey(0)
+        cap.release()
+    else:
+        target_frame = cv.imread(target)
+        cv.imshow('Target', target_frame)
+        cv.waitKey(1)
+        cap.release()
+
+    # Initialize threaded camera
+    # threaded_cam = ThreadedCamera(camera_index)
+    cap = cv.VideoCapture(camera_index)
+    n_frame = 0
+
+    # Initialize Tracker object
+    tracker = Tracker(target_frame, n_features, nn_dist)
+    tracker.initialize_target(feature_extraction_method, target_frame)
+    
+    b_boxes = txt_to_boundingbox('datasets/flight-video/target-location.txt')
+    correct_frames = 0
+    accuracy = 0
+    
+    while True:
+        start = time.time()
+        ret, frame = cap.read()
+
+        # Perform object detection
+        try:
+            # Track target from previously captured frame
+            # res = tracker.track(threaded_cam.frame, feature_extraction_method)
+            res = tracker.track(frame, feature_extraction_method)
+            if res:
+              # res_frame = ut.draw_image(threaded_cam.frame, res[0], res[1], 5, (0, 0, 255))
+                res_frame = ut.draw_image(frame, res[0], res[1], 5, (0, 0, 255))
+            else:
+                # res_frame = threaded_cam.frame
+                res_frame = frame
+
+            # Display result
+            # threaded_cam.show_frame(res_frame)
+            # print(threaded_cam.n_frame)
+            # print('Operations took {:2f}s'.format(time.time() - start))
+            cv.imshow('frame', res_frame)
+            cv.waitKey(1)
+            if video is not None:
+                if(evaluate(b_boxes, res, n_frame)):
+                    correct_frames += 1
+                n_frame += 1
+                accuracy = (correct_frames) / (n_frame)
+            
+                print('Clustering distance {} '.format(nn_dist),end='', flush=True)
+                print('Accuracy is at {:.2f}%.'.format(100*accuracy), end='\r')
+        except:
+            break
+    
+    outstring += 'Clustering distance {} '.format(nn_dist)
+    outstring += 'Accuracy is at {:.2f}%.\n'.format(100*accuracy)
+    
+    if write:
+        experiment_res = open('../report/ex-res.txt', 'a')
+        experiment_res.write(outstring)
+        experiment_res.close()
+        outstring = ''
+# ------------------------------------------------------------------------------------------------------------------------------ #
