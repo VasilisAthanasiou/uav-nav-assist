@@ -14,7 +14,7 @@ If you wish to run the travel_assist module you need to do the following:<br>
 
 If you wish to run the image_homing_guidance module you need to:<br>
 1. Set working directory to the app/ directory and execute the following:
-```python main.py homing -c <camera URL> -i <webcam index for VideoCapture> -m <feature extraction method> -n <number of extracted features> -d <minimum distance between neighbors for clustering algorithm> -v <Video file path> -t <Path of target image> -w <Either yes or no. Determines whether log data to app/dataset/experiment-results.txt or not>```
+```python main.py homing -c <camera URL> -i <webcam index for VideoCapture> -m <feature extraction method> -n <number of extracted features> -d <minimum distance between neighbors for clustering algorithm> -v <Video file path> -t <Path of target image> -w <Either yes or no. Determines whether log data to app/dataset/experiment-results.txt or not> -k <Clustering method. Either RoiCluster or MeanShift>```
 <br>Where `feature extraction method` can be either 'SURF', 'GOOD' (Shi-Tomashi) or 'ORB'. Running `python main.py homing` without options will execute the modules with default values.
 2. If you wish to run an experiment execute the following while on app/ directory:<br>
 ```chmod -x ./experiment.sh```<br>```./experiment.sh```<br>

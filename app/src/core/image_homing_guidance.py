@@ -96,7 +96,7 @@ class FeatureExtractor:
 # ----------------------------------------------- Tracker --------------------------------------------------------------- #
 
 class Tracker:
-    def __init__(self, target_image=None, n_features=10000, rclust_diam=50, hessian_thresh=100):
+    def __init__(self, target_image=None, n_features=10000, rclust_diam=50, hessian_thresh=100, clustering_method='RoiCluster'):
         """
         Contains methods that can be used to track an object using one image of said object
         Args:
@@ -106,6 +106,7 @@ class Tracker:
             roi_centroid: Centroid of ROI
             target_keypoints: Target keypoints
             target_descriptors: Target descriptors
+            clustering_method: Method used for clusterin. Either RoiCluster or MeanShift
         """
         self.target_image = target_image
         self.uav_image = None
@@ -113,6 +114,7 @@ class Tracker:
         self.roi_centroid = (0, 0)
         self.rclust_diam = rclust_diam
         self.target_keypoints, self.target_descriptors = None, None
+        self.clustering_method = clustering_method
 
     def track(self, uav_frame, method):
         self.uav_image = uav_frame
@@ -137,11 +139,13 @@ class Tracker:
         global outstring
         # Add target keypoints into a list
         matched_keypoints = [uav_keypoints[match.trainIdx] for match in matches]  # Append the corresponding UAV keypoint object
+        
         # Clustering algorithm
-        clusters = ut.roiCluster(matched_keypoints, self.roi_centroid, rclust_diam)  # Cluster features around rclust_diam from roi_centroid 
-
+        clustering = ut.Clustering(self.clustering_method)
+        clusters = clustering.compute(matched_keypoints, self.roi_centroid)  # Cluster features   
+        
         clusters.sort(key=len)  # Sort clusters
-        target_cluster = clusters[-1]  # Set the cluster with the most matched keypoints as the target cluster
+        target_cluster = clusters[-1] # Set the cluster with the most matched keypoints as the target cluster
         
         print('Cluster to matches ratio : {:.2f}'.format(len(target_cluster) / len(matched_keypoints)), end='\r')
 
@@ -292,7 +296,7 @@ def evaluate(bb_list, centroid, n_frame):
 
 # ------------------------------------------------ Initialization -------------------------------------------------------------- #
 
-def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='ORB', n_features=10000, nn_dist=100, video=None, target=None, write=False):
+def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='ORB', n_features=10000, nn_dist=100, video=None, target=None, write=False, clustering_method='RoiCluster'):
     """
     Args:
         cam_URL: URL of IP or RTSP camera
@@ -352,7 +356,7 @@ def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='
     n_frame = 0
 
     # Initialize Tracker object
-    tracker = Tracker(target_frame, n_features, nn_dist)
+    tracker = Tracker(target_frame, n_features, nn_dist, clustering_method=clustering_method)
     tracker.initialize_target(feature_extraction_method, target_frame)
     
     b_boxes = txt_to_boundingbox('datasets/flight-video/target-location.txt')
@@ -389,7 +393,8 @@ def initialize_homing(cam_URL=None, camera_index=-1, feature_extraction_method='
             
                 print('Clustering distance {} '.format(nn_dist),end='', flush=True)
                 print('Accuracy is at {:.2f}%.'.format(100*accuracy), end='\r')
-        except:
+        except Exception as e:
+            print(e)
             break
     
     outstring += 'Clustering distance {} '.format(nn_dist)
