@@ -2,7 +2,7 @@
 UAV Navigation Assist is a set of tools that could be used to guide UAV's under certain scenarios.
 
 ## Disclamer
-The software included on this repository is not meant for real life use. It was developed as an internship project to evaluate the developer's skills; not to be applied on an actual industrial project.
+The software included on this repository is not meant for real life use. It was developed as an internship project to evaluate the developer's skills.
 
 ## Use Cases
 1. Long Range Cruising:<br>
