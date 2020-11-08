@@ -11,6 +11,7 @@ The travel_assist module corrects the UAV's Inertial Navigation System inaccurac
 The image_homing_guidance module tracks a target on a video, given an image of said target, using Shi-Tomashi corner detector, ORB for feature description, and a custom clustering algorithm.
 
 ## How to run
+First off, you will need to create a Python 3 virtual environment that will have installed all the modules from the [requirements.txt](https://github.com/VasilisAthanasiou/uav-nav-assist/blob/master/requirements.txt) file. This program has been tested only on Python 3.7.7 but it could work on other versions of Python 3<br>
 If you wish to run the travel_assist module you need to do the following:<br>
 1. Create and populate a directory under `app/datasets/target-assist/sources`. The directory must contain the satellite images that will be used as checkpoints for the flight.
 2. To run a simulation, set the working directory to the app/ directory (where main.py is located) and execute the following command `python main.py travel-assist fast`.
